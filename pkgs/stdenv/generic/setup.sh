@@ -903,7 +903,7 @@ _addToEnv() {
         for depTargetOffset in "${allPlatOffsets[@]}"; do
             (( depHostOffset <= depTargetOffset )) || continue
             local hookRef="${hookVar}[$depTargetOffset - $depHostOffset]"
-            if [[ -z "${strictDeps-}" ]]; then
+            if [[ -z "${strictDeps-}" || "${NIX_IS_PSEUDO_CROSS-}" == "1" ]]; then
 
                 # Keep track of which packages we have visited before.
                 local visitedPkgs=""
@@ -912,6 +912,19 @@ _addToEnv() {
                 # compilation to ease the transition.
                 #
                 # TODO(@Ericson2314): Don't special-case native compilation
+                #
+                # In pseudo-cross (same config tuple, different gcc.arch — see
+                # stdenv.isPseudoCross), the ABI hazards that strictDeps guards
+                # against (wrong library rpaths, wrong sonames) don't apply
+                # because BUILD and HOST share the same ISA.  Running HOST
+                # buildInputs' setup hooks (qmakePathHook, Qt cmake env hook,
+                # ECM, pkg-config, …) here is therefore safe and necessary to
+                # populate QMAKEPATH, QT_ADDITIONAL_PACKAGES_PREFIX_PATH, etc.
+                # NIX_IS_PSEUDO_CROSS=1 is set by make-derivation.nix when
+                # stdenv.isPseudoCross is true.
+                #
+                # Extension note: drop the NIX_IS_PSEUDO_CROSS guard to apply
+                # to all cross builds once this has been validated.
                 for pkg in \
                     "${pkgsBuildBuild[@]}" \
                     "${pkgsBuildHost[@]}" \

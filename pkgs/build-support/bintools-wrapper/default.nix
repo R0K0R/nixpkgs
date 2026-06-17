@@ -271,6 +271,31 @@ stdenvNoCC.mkDerivation {
       basename=$(basename "${if exeSuffix != "" then "\${variant%${exeSuffix}}" else "$variant"}")
       wrap $basename ${./ld-wrapper.sh} $variant
     done
+
+    ${optionalString (targetPrefix != "" && targetPlatform.config == stdenvNoCC.hostPlatform.config) ''
+      # Pseudo-cross: targetPlatform.config == hostPlatform.config but gcc.arch
+      # differs (e.g. x86_64-unknown-linux-gnu + meteorlake vs generic).
+      # The cross bintools wrapper installs only prefixed names.  Build systems
+      # that call objdump, nm, strip, ar, as, ranlib, … by their plain names fail
+      # with "command not found" (Pattern A2) or silently get wrong results.
+      # Binutils tools do no code-generation and carry no -march; a meteorlake
+      # objdump reads znver5 ELF files correctly.  Plain-name symlinks are safe.
+      #
+      # Extension note: drop the targetPlatform.config guard to apply to ALL cross
+      # bintools wrappers (needed when upstreaming).
+      for binary in objdump objcopy nm strip ar ranlib as size strings readelf \
+                    addr2line c++filt gprof dwp elfedit; do
+        if [ -e "$out/bin/${targetPrefix}''${binary}${exeSuffix}" ]; then
+          ln -sf "${targetPrefix}''${binary}${exeSuffix}" "$out/bin/''${binary}${exeSuffix}"
+        fi
+      done
+      if [ -e "$out/bin/${targetPrefix}ld${exeSuffix}" ]; then
+        ln -sf "${targetPrefix}ld${exeSuffix}" "$out/bin/ld${exeSuffix}"
+      fi
+      if [ -e "$out/bin/${targetPrefix}ld.bfd${exeSuffix}" ]; then
+        ln -sf "${targetPrefix}ld.bfd${exeSuffix}" "$out/bin/ld.bfd${exeSuffix}"
+      fi
+    ''}
   '';
 
   strictDeps = true;
