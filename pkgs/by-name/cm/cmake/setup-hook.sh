@@ -101,6 +101,36 @@ cmakeConfigurePhase() {
     local flagsArray=()
     concatTo flagsArray cmakeFlags cmakeFlagsArray
 
+    # F11: Generate CMAKE_PROJECT_INCLUDE preload forwarding all -D flags as
+    # forced CACHE entries so ExternalProject_Add/FetchContent sub-builds inherit
+    # the cross flags from the outer cmake invocation. Pattern B2.
+    # F14: Also append try_run cache-answer vars so cmake try_run() probes that
+    # would exec a HOST binary on BUILD can be answered statically. Pattern 63.
+    local _nixpkgsPreload="$TMPDIR/nixpkgs-cmake-preload.cmake"
+    : > "$_nixpkgsPreload"
+    local _f _k _v
+    for _f in "${flagsArray[@]}"; do
+        case "$_f" in
+            -D*=*)
+                _k="${_f#-D}"; _k="${_k%%=*}"
+                _v="${_f#-D*=}"
+                [ "$_k" != "CMAKE_PROJECT_INCLUDE" ] && \
+                    printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
+                ;;
+        esac
+    done
+    if [ -n "${cmakeTryRunCacheVars-}" ]; then
+        local _e
+        for _e in $cmakeTryRunCacheVars; do
+            _k="${_e%%=*}"; _v="${_e#*=}"
+            printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
+        done
+    fi
+    [ -f "${cmakeDir}/cmake-try-run-cache.cmake" ] && \
+        cat "${cmakeDir}/cmake-try-run-cache.cmake" >> "$_nixpkgsPreload"
+    [ -s "$_nixpkgsPreload" ] && \
+        flagsArray=("-DCMAKE_PROJECT_INCLUDE=$_nixpkgsPreload" "${flagsArray[@]}")
+
     echoCmd 'cmake flags' "${flagsArray[@]}"
 
     cmake "$cmakeDir" "${flagsArray[@]}"
@@ -165,3 +195,29 @@ makeCmakeFindLibs() {
 # not using setupHook, because it could be a setupHook adding additional
 # include flags to NIX_CFLAGS_COMPILE
 postHooks+=(makeCmakeFindLibs)
+
+# F5: Populate CMAKE_PROGRAM_PATH from nativeBuildInputs bin/ dirs.
+# cmake's find_program() searches PATH and CMAKE_PROGRAM_PATH but NOT
+# NIXPKGS_CMAKE_PREFIX_PATH. Without this, find_program(TOOL) returns NOTFOUND
+# even when TOOL is in nativeBuildInputs. Pattern E binary-discovery side.
+addCMakeProgramPath() {
+    [ -d "$1/bin" ] && addToSearchPath CMAKE_PROGRAM_PATH "$1/bin"
+}
+addEnvHooks "$targetOffset" addCMakeProgramPath
+
+# F12: Read cmake-cross-helper-flags from HOST buildInputs and prepend to
+# cmakeFlags. Packages write BUILD-platform cmake tool vars (Qt6*Tools_DIR,
+# KF6_HOST_TOOLING, etc.) to nix-support/cmake-cross-helper-flags in their
+# postInstall; this hook forwards them into every consumer automatically.
+# Flags are also forwarded into ExternalProject_Add sub-builds via the F11
+# preload above. Pattern B/G5.
+addCMakeCrossHelperFlags() {
+    local _pkg="$1"
+    if [ -f "$_pkg/nix-support/cmake-cross-helper-flags" ]; then
+        local _flag
+        while IFS= read -r _flag || [ -n "$_flag" ]; do
+            [ -n "$_flag" ] && prependToVar cmakeFlags "$_flag"
+        done < "$_pkg/nix-support/cmake-cross-helper-flags"
+    fi
+}
+addEnvHooks "$hostOffset" addCMakeCrossHelperFlags
