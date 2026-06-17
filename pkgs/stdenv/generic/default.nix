@@ -194,6 +194,17 @@ let
 
       inherit buildPlatform hostPlatform targetPlatform;
 
+      # True when buildPlatform and hostPlatform share the same system tuple
+      # (config string) but differ in a sub-attribute such as gcc.arch.  nixpkgs
+      # activates full cross-compilation machinery, but the usual ABI hazards of
+      # real cross (different ISA, different calling conventions) don't apply.
+      # Relaxing certain cross-specific defences is safe here.
+      #
+      # Extension note: drop the .config equality guard to apply to all cross builds.
+      isPseudoCross =
+        hostPlatform != buildPlatform
+        && hostPlatform.config == buildPlatform.config;
+
       inherit
         extraNativeBuildInputs
         extraBuildInputs
