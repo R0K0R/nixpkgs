@@ -114,8 +114,27 @@ cmakeConfigurePhase() {
             -D*=*)
                 _k="${_f#-D}"; _k="${_k%%=*}"
                 _v="${_f#-D*=}"
-                [ "$_k" != "CMAKE_PROJECT_INCLUDE" ] && \
-                    printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
+                # Skip cmake infrastructure vars: toolchain paths (absolute on HOST,
+                # not meaningful in sub-builds), install dirs, and the var we're setting.
+                case "$_k" in
+                    CMAKE_PROJECT_INCLUDE|\
+                    CMAKE_C_COMPILER|CMAKE_CXX_COMPILER|\
+                    CMAKE_AR|CMAKE_RANLIB|CMAKE_STRIP|\
+                    CMAKE_INSTALL_PREFIX|CMAKE_INSTALL_NAME_DIR|\
+                    CMAKE_INSTALL_BINDIR|CMAKE_INSTALL_SBINDIR|\
+                    CMAKE_INSTALL_INCLUDEDIR|CMAKE_INSTALL_MANDIR|\
+                    CMAKE_INSTALL_INFODIR|CMAKE_INSTALL_DOCDIR|\
+                    CMAKE_INSTALL_LIBDIR|CMAKE_INSTALL_LIBEXECDIR|\
+                    CMAKE_INSTALL_LOCALEDIR|\
+                    CMAKE_FIND_USE_PACKAGE_REGISTRY|\
+                    CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY|\
+                    CMAKE_EXPORT_NO_PACKAGE_REGISTRY|\
+                    CMAKE_BUILD_TYPE|BUILD_TESTING)
+                        : ;;
+                    *)
+                        printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
+                        ;;
+                esac
                 ;;
         esac
     done
@@ -126,10 +145,12 @@ cmakeConfigurePhase() {
             printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
         done
     fi
-    [ -f "${cmakeDir}/cmake-try-run-cache.cmake" ] && \
+    if [ -f "${cmakeDir}/cmake-try-run-cache.cmake" ]; then
         cat "${cmakeDir}/cmake-try-run-cache.cmake" >> "$_nixpkgsPreload"
-    [ -s "$_nixpkgsPreload" ] && \
+    fi
+    if [ -s "$_nixpkgsPreload" ]; then
         flagsArray=("-DCMAKE_PROJECT_INCLUDE=$_nixpkgsPreload" "${flagsArray[@]}")
+    fi
 
     echoCmd 'cmake flags' "${flagsArray[@]}"
 
