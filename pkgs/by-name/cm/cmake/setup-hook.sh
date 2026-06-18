@@ -201,7 +201,7 @@ postHooks+=(makeCmakeFindLibs)
 # NIXPKGS_CMAKE_PREFIX_PATH. Without this, find_program(TOOL) returns NOTFOUND
 # even when TOOL is in nativeBuildInputs. Pattern E binary-discovery side.
 addCMakeProgramPath() {
-    [ -d "$1/bin" ] && addToSearchPath CMAKE_PROGRAM_PATH "$1/bin"
+    if [ -d "$1/bin" ]; then addToSearchPath CMAKE_PROGRAM_PATH "$1/bin"; fi
 }
 addEnvHooks "$targetOffset" addCMakeProgramPath
 
@@ -216,7 +216,7 @@ addCMakeCrossHelperFlags() {
     if [ -f "$_pkg/nix-support/cmake-cross-helper-flags" ]; then
         local _flag
         while IFS= read -r _flag || [ -n "$_flag" ]; do
-            [ -n "$_flag" ] && prependToVar cmakeFlags "$_flag"
+            if [ -n "$_flag" ]; then prependToVar cmakeFlags "$_flag"; fi
         done < "$_pkg/nix-support/cmake-cross-helper-flags"
     fi
 }
