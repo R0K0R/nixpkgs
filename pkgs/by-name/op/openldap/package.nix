@@ -128,9 +128,10 @@ stdenv.mkDerivation (finalAttrs: {
     # can probably be re-added once https://github.com/cyrusimap/cyrus-sasl/pull/772
     # has made it to a release
     rm -f tests/scripts/test076-authid-rewrite
-  ''
-  # FIXME: revert after this gets unconditional above (on staging* branch)
-  + lib.optionalString stdenv.hostPlatform.isi686 ''
+
+    # Sync replication tests (test*-sync*) have timing-sensitive sleeps that
+    # fail under build server load (heavy parallel jobs, ZFS sandbox, etc.).
+    # Was previously i686-only but the flakiness is environment-dependent.
     rm -f tests/scripts/test*-sync*
   '';
 
