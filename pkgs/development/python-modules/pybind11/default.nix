@@ -15,7 +15,10 @@
   makeSetupHook,
   # Build tests to verify cross-compilation works, but only when CPU bit
   # depth matches (otherwise Python headers cause LONG_BIT mismatch errors)
-  buildTests ? stdenv.hostPlatform.parsed.cpu.bits == stdenv.buildPlatform.parsed.cpu.bits,
+  # and not in pseudo-cross (HOST ISA may exceed BUILD ISA, causing SIGILL
+  # when executing compiled extension modules on the build machine).
+  buildTests ? stdenv.hostPlatform.parsed.cpu.bits == stdenv.buildPlatform.parsed.cpu.bits
+    && !stdenv.isPseudoCross,
 }:
 let
   setupHook = makeSetupHook {
