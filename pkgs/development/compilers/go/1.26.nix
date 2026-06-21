@@ -38,7 +38,15 @@ stdenv.mkDerivation (finalAttrs: {
     ++ lib.optionals stdenv.hostPlatform.isLinux [ stdenv.cc.libc.out ]
     ++ lib.optionals (stdenv.hostPlatform.libc == "glibc") [ stdenv.cc.libc.static ];
 
-  depsBuildTarget = lib.optional isCross targetCC;
+  depsBuildTarget = lib.optionals isCross (
+    [ targetCC ]
+    # F10: Go bootstrap links go_bootstrap with -extld=CC_FOR_TARGET (HOST gcc).
+    # ld.bfd needs HOST libc CRT files and libgcc_s. Add to sandbox via depsBuildTarget.
+    ++ lib.optionals stdenv.targetPlatform.isGnu [
+      targetCC.libc
+      (lib.getLib targetCC.cc)
+    ]
+  );
 
   depsTargetTarget = lib.optional stdenv.targetPlatform.isMinGW targetPackages.threads.package;
 
@@ -98,11 +106,11 @@ stdenv.mkDerivation (finalAttrs: {
     CXX_FOR_TARGET = "${targetCC}/bin/${targetCC.targetPrefix}c++";
   };
 
-  preBuild = lib.optionalString stdenv.isPseudoCross ''
-    # F10: pseudo-cross Go bootstrap links go_bootstrap with
-    # -extld=<cross-prefixed-gcc> which bypasses nix setup-hook LIBRARY_PATH.
-    # Inject libc and gcc-runtime paths so ld.bfd finds Scrt1.o, crti.o, libgcc_s.
-    export LIBRARY_PATH=${lib.makeLibraryPath [ stdenv.cc.libc (lib.getLib stdenv.cc.cc) ]}''${LIBRARY_PATH:+:''${LIBRARY_PATH}}
+  preBuild = lib.optionalString (isCross && stdenv.targetPlatform.isGnu) ''
+    # F10: Go bootstrap links go_bootstrap with -extld=CC_FOR_TARGET (HOST gcc).
+    # That raw gcc call bypasses nix setup-hook LIBRARY_PATH. ld.bfd cannot find
+    # Scrt1.o, crti.o, or libgcc_s without this.
+    export LIBRARY_PATH=${lib.makeLibraryPath [ targetCC.libc (lib.getLib targetCC.cc) ]}''${LIBRARY_PATH:+:''${LIBRARY_PATH}}
   '';
 
   buildPhase = ''
