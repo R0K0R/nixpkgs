@@ -40,9 +40,10 @@ stdenv.mkDerivation (finalAttrs: {
   cmakeBuildDir = "build.dir";
 
   # cmake cross mode fails to link example executables (no main in object list).
-  # Examples are not installed and not needed for the library.
+  # Remove both the add_subdirectory and any set_property(DIRECTORY examples …)
+  # that references the now-absent directory (causes configure error otherwise).
   postPatch = lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
-    sed -i '/add_subdirectory(examples)/d' CMakeLists.txt
+    sed -i '/add_subdirectory(examples)/d;/set_property.*DIRECTORY.*examples/d' CMakeLists.txt
   '';
 
   cmakeFlags =
