@@ -39,6 +39,12 @@ stdenv.mkDerivation (finalAttrs: {
   # case‐insensitive Darwin systems.
   cmakeBuildDir = "build.dir";
 
+  # cmake cross mode fails to link example executables (no main in object list).
+  # Examples are not installed and not needed for the library.
+  postPatch = lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    sed -i '/add_subdirectory(examples)/d' CMakeLists.txt
+  '';
+
   cmakeFlags =
     lib.optional finalAttrs.finalPackage.doCheck "-DWITH_TESTS=ON"
     ++ lib.optional (!stdenv.hostPlatform.isStatic) "-DBUILD_SHARED_LIBS=ON";
