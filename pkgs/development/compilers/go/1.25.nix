@@ -98,6 +98,13 @@ stdenv.mkDerivation (finalAttrs: {
     CXX_FOR_TARGET = "${targetCC}/bin/${targetCC.targetPrefix}c++";
   };
 
+  preBuild = lib.optionalString stdenv.isPseudoCross ''
+    # F10: pseudo-cross Go bootstrap links go_bootstrap with
+    # -extld=<cross-prefixed-gcc> which bypasses nix setup-hook LIBRARY_PATH.
+    # Inject libc and gcc-runtime paths so ld.bfd finds Scrt1.o, crti.o, libgcc_s.
+    export LIBRARY_PATH=${lib.makeLibraryPath [ stdenv.cc.libc (lib.getLib stdenv.cc.cc) ]}''${LIBRARY_PATH:+:''${LIBRARY_PATH}}
+  '';
+
   buildPhase = ''
     runHook preBuild
     export GOCACHE=$TMPDIR/go-cache
