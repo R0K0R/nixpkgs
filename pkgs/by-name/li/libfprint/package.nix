@@ -71,6 +71,14 @@ stdenv.mkDerivation (finalAttrs: {
     openssl
   ];
 
+  preConfigure = lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    cat > "$TMPDIR/pseudo-cross-no-exe-wrapper.ini" <<'EOF'
+    [properties]
+    needs_exe_wrapper = false
+    EOF
+    mesonFlagsArray+=("--cross-file" "$TMPDIR/pseudo-cross-no-exe-wrapper.ini")
+  '';
+
   mesonFlags = [
     "-Dudev_rules_dir=${placeholder "out"}/lib/udev/rules.d"
     # Include virtual drivers for fprintd tests
