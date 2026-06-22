@@ -35,14 +35,18 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-aNBUIKY3PP5A07UNg3N0qq+2cwb6Fk67oKQcXgr2G/4=";
   };
 
-  postPatch = ''
-    patchShebangs \
-      tests/test-runner.sh \
-      tests/unittest_inspector.py \
-      tests/virtual-image.py \
-      tests/umockdev-test.py \
-      tests/test-generated-hwdb.sh
-  '';
+  postPatch =
+    lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+      sed -i "s|^subdir('tests')$|# subdir('tests') -- disabled in cross builds|" meson.build
+    ''
+    + ''
+      patchShebangs \
+        tests/test-runner.sh \
+        tests/unittest_inspector.py \
+        tests/virtual-image.py \
+        tests/umockdev-test.py \
+        tests/test-generated-hwdb.sh
+    '';
 
   nativeBuildInputs = [
     pkg-config
@@ -79,7 +83,9 @@ stdenv.mkDerivation (finalAttrs: {
   # the right place.
   doCheck = false;
 
-  doInstallCheck = true;
+  # In cross builds the tests subdir is skipped at configure time (virtual-image.py
+  # imports gi.repository.FPrint which requires the built library at configure time).
+  doInstallCheck = stdenv.hostPlatform == stdenv.buildPlatform;
 
   installCheckPhase = ''
     runHook preInstallCheck
