@@ -1,0 +1,21 @@
+From: NixOS maintainers <maintainers@nixos.org>
+Subject: [PATCH] compiler_attributes: guard __attribute_const__ against glibc 2.42
+
+glibc 2.42 defines __attribute_const__ in sys/cdefs.h. When kernel host
+tools (resolve_btfids, etc.) include both the kernel header and a glibc
+header, GCC 15 errors with "redefined [-Werror]". Add an #ifndef guard
+so the kernel definition is skipped if already provided by the libc.
+
+--- a/include/linux/compiler_attributes.h
++++ b/include/linux/compiler_attributes.h
+@@ -80,7 +80,10 @@
+  *
+  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-const-function-attribute
+  */
+-#define __attribute_const__             __attribute__((__const__))
++#ifndef __attribute_const__
++# define __attribute_const__            __attribute__((__const__))
++#endif
+
+ /*
+  * Optional: only supported since gcc >= 9
