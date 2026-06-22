@@ -77,6 +77,10 @@ stdenv.mkDerivation (finalAttrs: {
     "-Dwith-usb-ids-path=${hwdata}/share/hwdata/usb.ids"
     "-Dwith-pci-ids-path=${hwdata}/share/hwdata/pci.ids"
     "-Denable-gtk-doc=true"
+  ] ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    # meson auto-disables introspection in cross builds; Vala requires
+    # introspection and would error out if left enabled.
+    "-Denable-vala=false"
   ];
 
   preCheck = ''
