@@ -22,9 +22,13 @@
   "HOSTCXX=${lib.getExe' buildPackages.stdenv.cc "${buildPackages.stdenv.cc.targetPrefix}c++"}"
   "HOSTAR=${lib.getExe' buildPackages.stdenv.cc.bintools "${buildPackages.stdenv.cc.targetPrefix}ar"}"
   "HOSTLD=${lib.getExe' buildPackages.stdenv.cc.bintools "${buildPackages.stdenv.cc.targetPrefix}ld"}"
-  # GCC 15 + glibc 2.42: stdio.h has a redundant vsscanf redeclaration that
-  # triggers -Werror=redundant-decls in objtool and other host tools.
-  "HOSTCFLAGS=-Wno-redundant-decls"
+  # GCC 15 + glibc 2.42 compatibility: glibc headers trigger several warnings
+  # in kernel host tools (objtool, genksyms, etc.) that become errors:
+  #   - stdio.h:522 redundant vsscanf redeclaration (-Wredundant-decls)
+  #   - sys/cdefs.h:486 __attribute_const__ macro redefinition
+  #   - libbpf -Wpacked issues (resolve_btfids)
+  # HOSTCFLAGS applies only to BUILD-machine tools, not the kernel itself.
+  "HOSTCFLAGS=-Wno-error"
   "ARCH=${stdenv.hostPlatform.linuxArch}"
   "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
 ]
