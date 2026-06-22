@@ -16549,10 +16549,6 @@ with self;
   };
 
   HTMLTree = buildPerlModule {
-    # Module::Build's delete_filetree crashes in pseudo-cross builds (Perl 5.42 +
-    # Cwd::fastcwd() trailing-newline). HTML-Tree ships Makefile.PL; switch to it.
-    # See cross-debug-2/04 and cross-debug-2/19.
-    useMakeMaker = true;
     pname = "HTML-Tree";
     version = "5.07";
     src = fetchurl {
@@ -16561,6 +16557,12 @@ with self;
     };
     buildInputs = [ TestFatal ];
     propagatedBuildInputs = [ HTMLParser ];
+    # Build.PL's add_to_cleanup triggers Module::Build's delete_filetree, which
+    # calls File::Path::rmtree → Cwd::fastcwd(). In pseudo-cross builds fastcwd()
+    # returns a trailing newline; Perl 5.42 crashes on stat() with such paths.
+    postPatch = ''
+      sed -i '/add_to_cleanup/d' Build.PL
+    '';
     meta = {
       description = "Work with HTML in a DOM-like tree structure";
       license = with lib.licenses; [
