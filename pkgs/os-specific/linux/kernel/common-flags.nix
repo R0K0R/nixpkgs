@@ -32,7 +32,7 @@
   # re-enabling the warning.  Passing EXTRA_WARNINGS= on the command line
   # overrides the makefile assignments (GNU Make command-line precedence),
   # preventing the warning from ever being added to libbpf's CFLAGS.
-  "HOSTCFLAGS=-Wno-error -Wno-macro-redefined"
+  "HOSTCFLAGS=-Wno-error"
   "EXTRA_WARNINGS="
   "ARCH=${stdenv.hostPlatform.linuxArch}"
   "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
