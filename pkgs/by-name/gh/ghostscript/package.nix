@@ -157,8 +157,10 @@ stdenv.mkDerivation (finalAttrs: {
     export DARWIN_LDFLAGS_SO_PREFIX=$out/lib/
   '';
 
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=declaration-after-statement";
+
   configureFlags = [
-    "CFLAGS=-std=gnu17 -Wno-error=declaration-after-statement"
+    "CFLAGS=-std=gnu17"
     "--with-system-libtiff"
     "--without-tesseract"
   ]
