@@ -60,16 +60,20 @@ lib.throwIf (attrs ? name)
           nativeBuildInputs =
             nativeBuildInputs
             ++ (
-              # In pseudo-cross (same x86_64 triple, different gcc.arch) canExecute
-              # returns false because lib/systems/default.nix requires the BUILD
-              # platform to also have a named gcc.arch to compare against the HOST
-              # one (e.g. meteorlake), and no generic x86_64 BUILD declares one.
-              # Using perl.mini (which has no dynamic loading) causes `use Fcntl`
-              # in bundled Module::Install to abort.  In pseudo-cross the BUILD
-              # machine can run HOST binaries, so use the full HOST perl instead.
-              if !(stdenv.isPseudoCross or false) && !(stdenv.buildPlatform.canExecute stdenv.hostPlatform)
-              then [ perl.mini ]
-              else [ perl ]
+              if stdenv.isPseudoCross or false then
+                # In pseudo-cross (same triple, different gcc.arch) canExecute returns
+                # false, so the normal path would use perl.mini (no dynamic loading).
+                # But HOST perl is compiled with arch-specific flags (e.g. -march=
+                # meteorlake with Intel-only instructions) that may SIGILL on the
+                # BUILD machine (e.g. AMD znver5).  Use the BUILD-native full perl
+                # instead: it runs safely on BUILD, has dynamic loading, and installs
+                # to the same lib/perl5/X/x86_64-linux path as HOST perl (perl's arch
+                # string is not affected by micro-arch tuning, only by CPU family).
+                [ (perl.__spliced.buildBuild or perl) ]
+              else if !(stdenv.buildPlatform.canExecute stdenv.hostPlatform) then
+                [ perl.mini ]
+              else
+                [ perl ]
             );
 
           inherit
