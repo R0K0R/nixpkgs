@@ -62,11 +62,40 @@ with self;
 
   # Helper functions for packages that use Module::Build to build.
   buildPerlModule =
-    args:
+    {
+      # useMakeMaker = true: use ExtUtils::MakeMaker (Makefile.PL) instead of
+      # Module::Build (Build.PL). For packages that ship both build systems,
+      # MakeMaker avoids Module::Build's Cwd::fastcwd() trailing-newline crash
+      # in pseudo-cross builds (Perl 5.42). builder.sh's preConfigure already
+      # calls perl Makefile.PL with correct cross-aware args; we only switch the
+      # build/install/check phases to use make instead of ./Build.
+      # See cross-debug-2/19 for the full analysis.
+      useMakeMaker ? false,
+      ...
+    }@args:
+    let
+      argsWithoutMM = removeAttrs args [ "useMakeMaker" ];
+    in
     buildPerlPackage (
-      {
-        # In case of cross-compilation, generated ./Build have host perl shebang, not build one
-        # so run it with build perl explicitly
+      (if useMakeMaker then {
+        buildPhase = ''
+          runHook preBuild
+          make
+          runHook postBuild
+        '';
+        installPhase = ''
+          runHook preInstall
+          make install
+          runHook postInstall
+        '';
+        checkPhase = ''
+          runHook preCheck
+          make test
+          runHook postCheck
+        '';
+      } else {
+        # In case of cross-compilation, generated ./Build have host perl shebang,
+        # not build one — run it with build perl explicitly.
         buildPhase = ''
           runHook preBuild
           perl Build.PL --prefix=$out;
@@ -83,14 +112,13 @@ with self;
           perl ./Build test
           runHook postCheck
         '';
-      }
-      // args
+      })
+      // argsWithoutMM
       // {
-        preConfigure = ''
-          touch Makefile.PL
-          ${args.preConfigure or ""}
-        '';
-        buildInputs = (args.buildInputs or [ ]) ++ [ ModuleBuild ];
+        preConfigure =
+          (if useMakeMaker then "" else "touch Makefile.PL\n")
+          + (args.preConfigure or "");
+        buildInputs = (args.buildInputs or [ ]) ++ (if useMakeMaker then [ ] else [ ModuleBuild ]);
       }
     );
 
@@ -16520,12 +16548,11 @@ with self;
     };
   };
 
-  # HTML-Tree ships both Build.PL (Module::Build) and Makefile.PL (MakeMaker).
-  # buildPerlModule uses Module::Build, which crashes in pseudo-cross builds via
-  # Cwd::fastcwd() returning a trailing-newline path (Perl 5.42 + cross env).
-  # Use buildPerlPackage instead: its default configurePhase runs perl Makefile.PL,
-  # avoiding Module::Build entirely. See cross-debug-2/04 and cross-debug-2/17.
-  HTMLTree = buildPerlPackage {
+  HTMLTree = buildPerlModule {
+    # Module::Build's delete_filetree crashes in pseudo-cross builds (Perl 5.42 +
+    # Cwd::fastcwd() trailing-newline). HTML-Tree ships Makefile.PL; switch to it.
+    # See cross-debug-2/04 and cross-debug-2/19.
+    useMakeMaker = true;
     pname = "HTML-Tree";
     version = "5.07";
     src = fetchurl {
