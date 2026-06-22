@@ -72,6 +72,7 @@ let
       jq
       gitMinimal
       installShellFiles
+      which
     ]
     ++ lib.optionals stdenv.hostPlatform.isDarwin [ darwin.DarwinTools ];
     strictDeps = true;
