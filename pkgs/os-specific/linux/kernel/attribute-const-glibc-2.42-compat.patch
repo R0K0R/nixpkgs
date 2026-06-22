@@ -8,7 +8,7 @@ so the kernel definition is skipped if already provided by the libc.
 
 --- a/include/linux/compiler_attributes.h
 +++ b/include/linux/compiler_attributes.h
-@@ -80,7 +80,10 @@
+@@ -80,7 +80,9 @@
   *
   *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-const-function-attribute
   */
@@ -16,6 +16,6 @@ so the kernel definition is skipped if already provided by the libc.
 +#ifndef __attribute_const__
 +# define __attribute_const__            __attribute__((__const__))
 +#endif
-
+ 
  /*
   * Optional: only supported since gcc >= 9
