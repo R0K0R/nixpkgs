@@ -21577,16 +21577,6 @@ with self;
       url = "mirror://cpan/authors/id/N/NE/NEZUMI/MIME-Charset-1.013.1.tar.gz";
       hash = "sha256-G7em4MDSUfI9bmC/hMmt78W3TuxYR1v+5NORB+YIcPA=";
     };
-    # In pseudo-cross builds (same x86_64 triple, different gcc.arch), nixpkgs
-    # lib/systems/default.nix canExecute() returns FALSE because the build
-    # platform has no gcc.arch and the host has one (e.g. meteorlake), and
-    # meteorlake is not in lib/systems/architectures.nix.  canExecute=false
-    # causes generic/default.nix to add perl.mini (no dynamic loading) as the
-    # nativeBuildInput instead of full perl.  The bundled inc/Module/Install/
-    # Makefile.pm then fails at `use Fcntl` with "dynamic loading not available
-    # in this perl".  Removing inc/ makes Makefile.PL fall back to the system
-    # Module::Install which works correctly regardless of which perl runs it.
-    preConfigure = "rm -rf inc";
     meta = {
       description = "Charset Information for MIME";
       license = with lib.licenses; [
