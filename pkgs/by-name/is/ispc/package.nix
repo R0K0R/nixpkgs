@@ -9,6 +9,7 @@
   bison,
   flex,
   llvmPackages,
+  buildPackages,
   ncurses,
   onetbb,
   # the default test target is sse4, but that is not supported by all Hydra agents
@@ -18,6 +19,18 @@
     else
       [ "sse2-i32x4" ],
 }:
+
+# In cross builds, CLANG_EXECUTABLE/CLANGPP_EXECUTABLE run on the BUILD machine
+# to compile LLVM bitcode builtins.  The HOST cross-wrapper only exposes a
+# prefixed clang++ (x86_64-unknown-linux-gnu-clang++), not plain clang++.
+# Use buildPackages (BUILD-native) clang so cmake can find the plain binary.
+let
+  clangBin =
+    if stdenv.hostPlatform != stdenv.buildPlatform then
+      buildPackages.llvmPackages.clang
+    else
+      llvmPackages.clang;
+in
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "ispc";
@@ -83,8 +96,8 @@ stdenv.mkDerivation (finalAttrs: {
     (lib.cmakeFeature "FILE_CHECK_EXECUTABLE" "${llvmPackages.llvm}/bin/FileCheck")
     (lib.cmakeFeature "LLVM_AS_EXECUTABLE" "${llvmPackages.llvm}/bin/llvm-as")
     (lib.cmakeFeature "LLVM_CONFIG_EXECUTABLE" "${llvmPackages.llvm.dev}/bin/llvm-config")
-    (lib.cmakeFeature "CLANG_EXECUTABLE" "${llvmPackages.clang}/bin/clang")
-    (lib.cmakeFeature "CLANGPP_EXECUTABLE" "${llvmPackages.clang}/bin/clang++")
+    (lib.cmakeFeature "CLANG_EXECUTABLE" "${clangBin}/bin/clang")
+    (lib.cmakeFeature "CLANGPP_EXECUTABLE" "${clangBin}/bin/clang++")
     (lib.cmakeBool "ISPC_INCLUDE_EXAMPLES" false)
     (lib.cmakeBool "ISPC_INCLUDE_UTILS" false)
     (lib.cmakeFeature "ARM_ENABLED=" (
