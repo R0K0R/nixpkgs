@@ -22,13 +22,16 @@
   "HOSTCXX=${lib.getExe' buildPackages.stdenv.cc "${buildPackages.stdenv.cc.targetPrefix}c++"}"
   "HOSTAR=${lib.getExe' buildPackages.stdenv.cc.bintools "${buildPackages.stdenv.cc.targetPrefix}ar"}"
   "HOSTLD=${lib.getExe' buildPackages.stdenv.cc.bintools "${buildPackages.stdenv.cc.targetPrefix}ld"}"
-  # GCC 15 + glibc 2.42 compatibility: glibc headers trigger several warnings
-  # in kernel host tools (objtool, genksyms, etc.) that become errors:
-  #   - stdio.h:522 redundant vsscanf redeclaration (-Wredundant-decls)
+  # GCC 15 + glibc 2.42 compatibility: glibc headers trigger warnings in
+  # kernel host tools (objtool, resolve_btfids/libbpf, genksyms, etc.):
+  #   - stdio.h:522 vsscanf / inttypes.h:394 wcstoumax redundant redecls
   #   - sys/cdefs.h:486 __attribute_const__ macro redefinition
-  #   - libbpf -Wpacked issues (resolve_btfids)
+  # -Wno-error covers tools where HOSTCFLAGS is appended last (objtool).
+  # -Wno-redundant-decls / -Wno-macro-redefined are needed for libbpf, which
+  # prepends EXTRA_CFLAGS=$(HOSTCFLAGS) then appends its own -Werror; disabling
+  # the warning entirely prevents -Werror from promoting it regardless of order.
   # HOSTCFLAGS applies only to BUILD-machine tools, not the kernel itself.
-  "HOSTCFLAGS=-Wno-error"
+  "HOSTCFLAGS=-Wno-error -Wno-redundant-decls -Wno-macro-redefined"
   "ARCH=${stdenv.hostPlatform.linuxArch}"
   "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
 ]
