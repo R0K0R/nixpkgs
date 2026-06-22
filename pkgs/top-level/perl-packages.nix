@@ -16520,7 +16520,12 @@ with self;
     };
   };
 
-  HTMLTree = (buildPerlModule {
+  # HTML-Tree ships both Build.PL (Module::Build) and Makefile.PL (MakeMaker).
+  # buildPerlModule uses Module::Build, which crashes in pseudo-cross builds via
+  # Cwd::fastcwd() returning a trailing-newline path (Perl 5.42 + cross env).
+  # Use buildPerlPackage instead: its default configurePhase runs perl Makefile.PL,
+  # avoiding Module::Build entirely. See cross-debug-2/04 and cross-debug-2/17.
+  HTMLTree = buildPerlPackage {
     pname = "HTML-Tree";
     version = "5.07";
     src = fetchurl {
@@ -16537,18 +16542,7 @@ with self;
       ];
       mainProgram = "htmltree";
     };
-  }).overrideAttrs (old: {
-    # Module::Build's delete_filetree uses deprecated File::Path::rmtree which
-    # saves/restores cwd via Cwd::fastcwd(). Perl 5.42 warns on stat with
-    # newlines; fastcwd() returns a path with trailing newline in pseudo-cross
-    # builds, causing the cwd restoration to fail with "cannot stat initial
-    # working directory". HTML-Tree ships Makefile.PL; builder.sh's preConfigure
-    # always runs perl Makefile.PL, so switching to make avoids Module::Build.
-    configurePhase = "runHook preConfigure; perl Makefile.PL; runHook postConfigure";
-    buildPhase = "runHook preBuild; make; runHook postBuild";
-    installPhase = "runHook preInstall; make install; runHook postInstall";
-    checkPhase = "runHook preCheck; make test; runHook postCheck";
-  });
+  };
 
   HTMLTreeBuilderXPath = buildPerlPackage {
     pname = "HTML-TreeBuilder-XPath";
