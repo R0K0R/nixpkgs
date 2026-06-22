@@ -872,9 +872,13 @@ rec {
         nativeBuildInputs = [
           pkg-config
           perl
+          # clisp runs during configure (--with-clisp-runtime probe) and during
+          # build (generates xindy.mem).  It must be in nativeBuildInputs so it
+          # lands in PATH on the BUILD machine; buildInputs only provides HOST
+          # libraries and is not added to PATH under strictDeps / cross builds.
+          clisp
         ];
         buildInputs = [
-          clisp
           libiconv
           perl
         ];
