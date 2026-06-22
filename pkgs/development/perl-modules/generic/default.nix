@@ -59,22 +59,7 @@ lib.throwIf (attrs ? name)
           buildInputs = buildInputs ++ [ perl ];
           nativeBuildInputs =
             nativeBuildInputs
-            ++ (
-              if stdenv.isPseudoCross or false then
-                # In pseudo-cross (same triple, different gcc.arch) canExecute returns
-                # false, so the normal path would use perl.mini (no dynamic loading).
-                # But HOST perl is compiled with arch-specific flags (e.g. -march=
-                # meteorlake with Intel-only instructions) that may SIGILL on the
-                # BUILD machine (e.g. AMD znver5).  Use the BUILD-native full perl
-                # instead: it runs safely on BUILD, has dynamic loading, and installs
-                # to the same lib/perl5/X/x86_64-linux path as HOST perl (perl's arch
-                # string is not affected by micro-arch tuning, only by CPU family).
-                [ (perl.__spliced.buildBuild or perl) ]
-              else if !(stdenv.buildPlatform.canExecute stdenv.hostPlatform) then
-                [ perl.mini ]
-              else
-                [ perl ]
-            );
+            ++ (if !(stdenv.buildPlatform.canExecute stdenv.hostPlatform) then [ perl.mini ] else [ perl ]);
 
           inherit
             outputs
