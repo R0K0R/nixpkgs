@@ -37288,6 +37288,8 @@ with self;
         --replace-fail 'AR_RC = ar rcs' 'AR_RC = ${pkgs.stdenv.cc.targetPrefix}ar rcs'
       substituteInPlace JPEG/jpeg/makefile.cfg \
         --replace-fail 'AR= ar rc' 'AR= ${pkgs.stdenv.cc.targetPrefix}ar rc'
+    '' + lib.optionalString (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) ''
+      perl -i -0pe 's/if \(\$Tk::MMtry::VERSION ge .4\.007\. &&\n\s+try_run\("config\/has_png\.c",\[\$all_cflags\],\[\$all_libs\]\)\)/if (1)/s' PNG/Makefile.PL
     '';
     makeMakerFlags = [
       "AR=${pkgs.stdenv.cc.targetPrefix}ar"
