@@ -16520,7 +16520,7 @@ with self;
     };
   };
 
-  HTMLTree = buildPerlModule {
+  HTMLTree = (buildPerlModule {
     pname = "HTML-Tree";
     version = "5.07";
     src = fetchurl {
@@ -16537,7 +16537,17 @@ with self;
       ];
       mainProgram = "htmltree";
     };
-  };
+  }).overrideAttrs (old: {
+    # Module::Build's delete_filetree uses deprecated File::Path::rmtree which
+    # saves/restores cwd via Cwd::fastcwd(). Perl 5.42 warns on stat with
+    # newlines; fastcwd() returns a path with trailing newline in pseudo-cross
+    # builds, causing the cwd restoration to fail with "cannot stat initial
+    # working directory". HTML-Tree ships Makefile.PL; builder.sh's preConfigure
+    # always runs perl Makefile.PL, so switching to make avoids Module::Build.
+    buildPhase = "runHook preBuild; make; runHook postBuild";
+    installPhase = "runHook preInstall; make install; runHook postInstall";
+    checkPhase = "runHook preCheck; make test; runHook postCheck";
+  });
 
   HTMLTreeBuilderXPath = buildPerlPackage {
     pname = "HTML-TreeBuilder-XPath";
