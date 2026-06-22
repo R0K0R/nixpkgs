@@ -21948,7 +21948,7 @@ with self;
       # then refuses to stat the path ("filename containing newline"), rmtree
       # returns 0, and delete_filetree dies.  Use system("rm","-rf") instead
       # to bypass the entire File::Path cwd-tracking chain.
-      sed -i 's|File::Path::rmtree(\$_, 0, 0);|system("rm", "-rf", "--", $_);|g' \
+      sed -i 's|File::Path::rmtree(\$_, 0, 0);|system("rm", "-rf", "--", $_);|g; s|File::Path::rmtree(\$f, 0, 0);|system("rm", "-rf", "--", $f);|g' \
         lib/Module/Build/Base.pm
     '' + lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
       # remove version check since miniperl uses a stub of File::Temp, which do not provide a version:
