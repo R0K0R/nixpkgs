@@ -37,7 +37,10 @@ stdenv.mkDerivation (finalAttrs: {
 
   postPatch =
     lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
-      sed -i "s|^subdir('tests')$|# subdir('tests') -- disabled in cross builds|" meson.build
+      sed -i \
+        "s|^subdir('tests')$|# subdir('tests') -- disabled in cross builds|;
+         s|^subdir('examples')$|# subdir('examples') -- disabled in cross builds (references installed_tests from tests)|" \
+        meson.build
     ''
     + ''
       patchShebangs \
