@@ -155,6 +155,8 @@ dart-bin.overrideAttrs (oldAttrs: {
   postPatch = ''
     sed --in-place 's/"-fsanitize=memory"//g' build/config/compiler/BUILD.gn
     patchShebangs runtime/tools/
+    # C linkage declaration conflict warning is fatal due to -Werror flag; removing
+    sed --in-place 's/"-Werror"//g' build/config/compiler/BUILD.gn
     sed --in-place 's/ldflags = pkgresult\[4\]/ldflags = []/' build/config/linux/pkg_config.gni
     cp ${
       fetchurl {
