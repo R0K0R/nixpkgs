@@ -59,7 +59,18 @@ lib.throwIf (attrs ? name)
           buildInputs = buildInputs ++ [ perl ];
           nativeBuildInputs =
             nativeBuildInputs
-            ++ (if !(stdenv.buildPlatform.canExecute stdenv.hostPlatform) then [ perl.mini ] else [ perl ]);
+            ++ (
+              # In pseudo-cross (same x86_64 triple, different gcc.arch) canExecute
+              # returns false because lib/systems/default.nix requires the BUILD
+              # platform to also have a named gcc.arch to compare against the HOST
+              # one (e.g. meteorlake), and no generic x86_64 BUILD declares one.
+              # Using perl.mini (which has no dynamic loading) causes `use Fcntl`
+              # in bundled Module::Install to abort.  In pseudo-cross the BUILD
+              # machine can run HOST binaries, so use the full HOST perl instead.
+              if !(stdenv.isPseudoCross or false) && !(stdenv.buildPlatform.canExecute stdenv.hostPlatform)
+              then [ perl.mini ]
+              else [ perl ]
+            );
 
           inherit
             outputs
