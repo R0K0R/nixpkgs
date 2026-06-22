@@ -21577,6 +21577,10 @@ with self;
       url = "mirror://cpan/authors/id/N/NE/NEZUMI/MIME-Charset-1.013.1.tar.gz";
       hash = "sha256-G7em4MDSUfI9bmC/hMmt78W3TuxYR1v+5NORB+YIcPA=";
     };
+    # The bundled inc/Module/Install/Makefile.pm calls `use Fcntl` which fails
+    # in cross builds ("dynamic loading not available in this perl").  Delete the
+    # bundled inc/ so Makefile.PL falls back to the system Module::Install.
+    preConfigure = "rm -rf inc";
     meta = {
       description = "Charset Information for MIME";
       license = with lib.licenses; [
