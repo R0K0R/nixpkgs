@@ -21577,6 +21577,18 @@ with self;
       url = "mirror://cpan/authors/id/N/NE/NEZUMI/MIME-Charset-1.013.1.tar.gz";
       hash = "sha256-G7em4MDSUfI9bmC/hMmt78W3TuxYR1v+5NORB+YIcPA=";
     };
+    # The bundled inc/Module/Install/Makefile.pm uses `use Fcntl qw/:flock :seek/`
+    # to get LOCK_EX and SEEK_SET.  Fcntl is an XS module; miniperl (used when
+    # canExecute returns false, e.g. pseudo-cross where BUILD lacks gcc.arch) has
+    # no dynamic loading and aborts at parse time.  Replace the two constants with
+    # their stable POSIX values (LOCK_EX=2, SEEK_SET=0) and drop the import.
+    postPatch = ''
+      sed -i \
+        -e '/^use Fcntl/d' \
+        -e 's/flock MAKEFILE, LOCK_EX/flock MAKEFILE, 2/' \
+        -e 's/seek MAKEFILE, 0, SEEK_SET/seek MAKEFILE, 0, 0/' \
+        inc/Module/Install/Makefile.pm
+    '';
     meta = {
       description = "Charset Information for MIME";
       license = with lib.licenses; [
