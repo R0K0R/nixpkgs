@@ -37333,6 +37333,11 @@ with self;
         --replace-fail 'AR= ar rc' 'AR= ${pkgs.stdenv.cc.targetPrefix}ar rc'
     '' + lib.optionalString (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) ''
       perl -i -0pe 's/if \(\$Tk::MMtry::VERSION ge .4\.007\. &&\n\s+try_run\("config\/has_png\.c",\[\$all_cflags\],\[\$all_libs\]\)\)/if (1)/s' PNG/Makefile.PL
+      substituteInPlace PNG/Makefile.PL \
+        --replace-fail "\$libpng_cflags = '-I/usr/local/include';" "\$libpng_cflags = '-I${pkgs.libpng.dev}/include';" \
+        --replace-fail "\$libpng_libs   = '-lpng -lm';" "\$libpng_libs   = '-L${pkgs.libpng.out}/lib -lpng -lm';" \
+        --replace-fail "\$zlib_cflags = '-I/usr/local/include';" "\$zlib_cflags = '-I${pkgs.zlib.dev}/include';" \
+        --replace-fail "\$zlib_libs   = '-lz';" "\$zlib_libs   = '-L${pkgs.zlib.out}/lib -lz';"
     '';
     makeMakerFlags = [
       "AR=${pkgs.stdenv.cc.targetPrefix}ar"
