@@ -16544,6 +16544,7 @@ with self;
     # builds, causing the cwd restoration to fail with "cannot stat initial
     # working directory". HTML-Tree ships Makefile.PL; builder.sh's preConfigure
     # always runs perl Makefile.PL, so switching to make avoids Module::Build.
+    configurePhase = "runHook preConfigure; perl Makefile.PL; runHook postConfigure";
     buildPhase = "runHook preBuild; make; runHook postBuild";
     installPhase = "runHook preInstall; make install; runHook postInstall";
     checkPhase = "runHook preCheck; make test; runHook postCheck";
