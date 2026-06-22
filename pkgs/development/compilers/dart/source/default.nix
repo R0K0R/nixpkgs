@@ -158,9 +158,8 @@ dart-bin.overrideAttrs (oldAttrs: {
     # C linkage declaration conflict warning is fatal due to -Werror flag; removing
     sed --in-place 's/"-Werror"//g' build/config/compiler/BUILD.gn
     # GCC 15 removed fpclassify/isnan/isinf/isfinite from the global namespace;
-    # qualify them with std:: so C++ code compiles without <math.h> pollution.
-    perl -i -pe 's/(?<![_:a-zA-Z])(fpclassify|isnan|isinf|isfinite)\(/std::$1(/g' \
-      runtime/vm/simulator_riscv.cc
+    # qualify unqualified calls with std:: (preserve any existing std:: calls).
+    sed --in-place -E 's/(^|[^:])fpclassify\(/\1std::fpclassify(/g' runtime/vm/simulator_riscv.cc
     sed --in-place 's/ldflags = pkgresult\[4\]/ldflags = []/' build/config/linux/pkg_config.gni
     cp ${
       fetchurl {
