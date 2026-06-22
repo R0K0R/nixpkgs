@@ -160,7 +160,7 @@ dart-bin.overrideAttrs (oldAttrs: {
     # GCC 15 removed C math functions from the global namespace in C++ headers;
     # qualify unqualified calls with std:: (preserve any existing std:: calls).
     for func in fpclassify signbit isnan isinf isfinite; do
-      sed --in-place -E "s/(^|[^:])${func}\(/\1std::${func}(/g" runtime/vm/simulator_riscv.cc
+      sed --in-place -E "s/(^|[^:])''${func}\(/\1std::''${func}(/g" runtime/vm/simulator_riscv.cc
     done
     sed --in-place 's/ldflags = pkgresult\[4\]/ldflags = []/' build/config/linux/pkg_config.gni
     cp ${
