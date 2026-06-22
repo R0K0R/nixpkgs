@@ -26,12 +26,14 @@
   # kernel host tools (objtool, resolve_btfids/libbpf, genksyms, etc.):
   #   - stdio.h:522 vsscanf / inttypes.h:394 wcstoumax redundant redecls
   #   - sys/cdefs.h:486 __attribute_const__ macro redefinition
-  # -Wno-error covers tools where HOSTCFLAGS is appended last (objtool).
-  # -Wno-redundant-decls / -Wno-macro-redefined are needed for libbpf, which
-  # prepends EXTRA_CFLAGS=$(HOSTCFLAGS) then appends its own -Werror; disabling
-  # the warning entirely prevents -Werror from promoting it regardless of order.
-  # HOSTCFLAGS applies only to BUILD-machine tools, not the kernel itself.
-  "HOSTCFLAGS=-Wno-error -Wno-redundant-decls -Wno-macro-redefined"
+  # HOSTCFLAGS=-Wno-error covers tools where our flags appear last (objtool).
+  # For libbpf: tools/scripts/Makefile.include puts -Wredundant-decls in
+  # EXTRA_WARNINGS which libbpf appends AFTER EXTRA_CFLAGS=$(HOSTCFLAGS),
+  # re-enabling the warning.  Passing EXTRA_WARNINGS= on the command line
+  # overrides the makefile assignments (GNU Make command-line precedence),
+  # preventing the warning from ever being added to libbpf's CFLAGS.
+  "HOSTCFLAGS=-Wno-error -Wno-macro-redefined"
+  "EXTRA_WARNINGS="
   "ARCH=${stdenv.hostPlatform.linuxArch}"
   "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
 ]
