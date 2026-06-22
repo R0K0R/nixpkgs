@@ -337,6 +337,73 @@ stdenv.mkDerivation (
         cp -r $dir/* $mini/lib/perl5/cross_perl/${version}
       done
 
+      # Add a Fcntl cross_perl stub: the real Fcntl is XS-only, so miniperl
+      # cannot load it.  Packages whose bundled inc/ calls `use Fcntl` (e.g.
+      # Module::Install's Makefile.pm) abort at parse time.  Provide the
+      # constants most commonly needed (flock flags, seek origins).
+      cat > $mini/lib/perl5/cross_perl/${version}/Fcntl.pm << 'PERL_EOF'
+      package Fcntl;
+      use Exporter 'import';
+      our @EXPORT    = qw(O_RDONLY O_WRONLY O_RDWR O_CREAT O_EXCL O_TRUNC O_APPEND);
+      our @EXPORT_OK = qw(
+          LOCK_SH LOCK_EX LOCK_NB LOCK_UN
+          SEEK_SET SEEK_CUR SEEK_END
+          O_RDONLY O_WRONLY O_RDWR O_CREAT O_EXCL O_TRUNC O_APPEND
+      );
+      our %EXPORT_TAGS = (
+          flock => [qw(LOCK_SH LOCK_EX LOCK_NB LOCK_UN)],
+          seek  => [qw(SEEK_SET SEEK_CUR SEEK_END)],
+          all   => \@EXPORT_OK,
+      );
+      sub LOCK_SH () { 1 }  sub LOCK_EX () { 2 }
+      sub LOCK_NB () { 4 }  sub LOCK_UN () { 8 }
+      sub SEEK_SET () { 0 } sub SEEK_CUR () { 1 } sub SEEK_END () { 2 }
+      sub O_RDONLY () { 0 } sub O_WRONLY () { 1 } sub O_RDWR  () { 2 }
+      sub O_CREAT  () { 0100 } sub O_EXCL () { 0200 }
+      sub O_TRUNC  () { 01000 } sub O_APPEND () { 02000 }
+      1;
+      PERL_EOF
+
+      # Improve the File::Temp cross_perl stub: the upstream stub has tempfile
+      # but no tempdir and no import method, causing `use File::Temp qw(tempdir)`
+      # to fail with "undefined import method" when miniperl builds perl modules
+      # whose bundled inc/ uses File::Temp (e.g. ExtUtils::HasCompiler in
+      # Devel-GlobalDestruction).  Provide a minimal but complete stub.
+      mkdir -p $mini/lib/perl5/cross_perl/${version}/File
+      cat > $mini/lib/perl5/cross_perl/${version}/File/Temp.pm << 'PERL_EOF'
+      package File::Temp;
+      use Exporter 'import';
+      our @EXPORT_OK = qw(tempfile tempdir);
+      our %EXPORT_TAGS = (all => \@EXPORT_OK);
+
+      sub tempfile {
+          my $patt = shift || 'XXXXXXXX';
+          my %opts = @_;
+          my ($tmp, $fh);
+          for (0..9) {
+              ($tmp = $patt) =~ s{X+}{sprintf "%0*d", length($&), int(rand(10**length($&)))}e;
+              $tmp = "$opts{DIR}/$tmp" if $opts{DIR};
+              open($fh, '+>', $tmp) or next;
+              return wantarray ? ($fh, $tmp) : $fh;
+          }
+          die "File::Temp::tempfile: could not create temp file";
+      }
+
+      sub tempdir {
+          my $patt = shift || 'XXXXXXXX';
+          my %opts = @_;
+          my $tmp;
+          for (0..9) {
+              ($tmp = $patt) =~ s{X+}{sprintf "%0*d", length($&), int(rand(10**length($&)))}e;
+              $tmp = "$opts{DIR}/$tmp" if $opts{DIR};
+              mkdir($tmp, 0700) and return $tmp;
+          }
+          die "File::Temp::tempdir: could not create temp dir";
+      }
+
+      1;
+      PERL_EOF
+
       mkdir -p $mini/bin
       install -m755 miniperl $mini/bin/perl
 
