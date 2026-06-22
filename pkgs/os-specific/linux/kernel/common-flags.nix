@@ -22,6 +22,9 @@
   "HOSTCXX=${lib.getExe' buildPackages.stdenv.cc "${buildPackages.stdenv.cc.targetPrefix}c++"}"
   "HOSTAR=${lib.getExe' buildPackages.stdenv.cc.bintools "${buildPackages.stdenv.cc.targetPrefix}ar"}"
   "HOSTLD=${lib.getExe' buildPackages.stdenv.cc.bintools "${buildPackages.stdenv.cc.targetPrefix}ld"}"
+  # GCC 15 + glibc 2.42: stdio.h has a redundant vsscanf redeclaration that
+  # triggers -Werror=redundant-decls in objtool and other host tools.
+  "HOSTCFLAGS=-Wno-redundant-decls"
   "ARCH=${stdenv.hostPlatform.linuxArch}"
   "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
 ]
