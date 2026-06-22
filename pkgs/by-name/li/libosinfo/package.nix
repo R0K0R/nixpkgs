@@ -80,7 +80,7 @@ stdenv.mkDerivation (finalAttrs: {
   ] ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
     # meson auto-disables introspection in cross builds; Vala requires
     # introspection and would error out if left enabled.
-    "-Denable-vala=false"
+    "-Denable-vala=disabled"
   ];
 
   preCheck = ''
