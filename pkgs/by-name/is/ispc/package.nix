@@ -9,7 +9,6 @@
   bison,
   flex,
   llvmPackages,
-  buildPackages,
   ncurses,
   onetbb,
   # the default test target is sse4, but that is not supported by all Hydra agents
@@ -20,16 +19,12 @@
       [ "sse2-i32x4" ],
 }:
 
-# In cross builds, CLANG_EXECUTABLE/CLANGPP_EXECUTABLE run on the BUILD machine
-# to compile LLVM bitcode builtins.  The HOST cross-wrapper only exposes a
-# prefixed clang++ (x86_64-unknown-linux-gnu-clang++), not plain clang++.
-# Use buildPackages (BUILD-native) clang so cmake can find the plain binary.
+# In cross builds, the HOST cc-wrapper only exposes a prefixed clang++
+# (x86_64-unknown-linux-gnu-clang++), not plain clang++.  cmake's
+# CLANGPP_EXECUTABLE path must exist; use the unwrapped clang.cc which has
+# plain clang/clang++ binaries regardless of cross prefix.
 let
-  clangBin =
-    if stdenv.hostPlatform != stdenv.buildPlatform then
-      buildPackages.llvmPackages.clang
-    else
-      llvmPackages.clang;
+  clangBin = llvmPackages.clang.cc;
 in
 
 stdenv.mkDerivation (finalAttrs: {
