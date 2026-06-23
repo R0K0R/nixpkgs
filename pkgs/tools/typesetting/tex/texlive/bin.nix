@@ -426,6 +426,10 @@ rec {
       potrace
     ];
 
+    # ICU 76 moved ucol_openRules from libicuuc to libicui18n; upmendex
+    # configure only requests icu-uc and icu-io pkg-config components.
+    env.NIX_LDFLAGS = "-licui18n";
+
     /*
       deleting the unused packages speeds up configure by a considerable margin
       and ensures we do not rebuild existing libraries by mistake
@@ -729,6 +733,10 @@ rec {
       core # kpathsea
       icu
     ];
+
+    # ICU 76 moved ucol_strcollUTF8 from libicuuc to libicui18n; the bibtex-x
+    # configure script only requests icu-uc and icu-io pkg-config components.
+    env.NIX_LDFLAGS = "-licui18n";
 
     preConfigure = "cd texk/bibtex-x";
 
