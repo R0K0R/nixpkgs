@@ -336,7 +336,9 @@ stdenv.mkDerivation (finalAttrs: {
     wrapPythonPrograms
   '';
 
-  disallowedReferences = lib.optionals isCross [
+  # In pseudo-cross BUILD and HOST are the same ISA, so BUILD python/shell
+  # references in the output are harmless; skip the disallowedReferences check.
+  disallowedReferences = lib.optionals (isCross && !stdenv.isPseudoCross) [
     buildPackages.python3Packages.python
     buildPackages.runtimeShellPackage
   ];
