@@ -319,7 +319,13 @@ stdenv.mkDerivation {
     qttranslations != null && !isCrossBuild
   ) "-DINSTALL_TRANSLATIONSDIR=${qttranslations}/translations";
 
-  env.NIX_CFLAGS_COMPILE = "-DNIXPKGS_QT_PLUGIN_PREFIX=\"${qtPluginPrefix}\"";
+  env.NIX_CFLAGS_COMPILE = "-DNIXPKGS_QT_PLUGIN_PREFIX=\"${qtPluginPrefix}\""
+    # CMake re-emits glibc's include path as an explicit -isystem flag, moving
+    # it before the cross GCC's C++ headers.  cstdlib's #include_next <stdlib.h>
+    # then can't find stdlib.h (it searches after its own position, but glibc is
+    # now before it).  Pin the C++ header dir first with -I so it stays in front.
+    + lib.optionalString isCrossBuild
+      " -I${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}";
 
   outputs = [
     "out"
