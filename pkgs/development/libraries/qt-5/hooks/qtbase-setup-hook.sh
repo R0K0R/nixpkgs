@@ -1,6 +1,12 @@
 if [[ -n "${__nix_qtbase-}" ]]; then
     # Throw an error if a different version of Qt was already set up.
-    if [[ "$__nix_qtbase" != "@dev@" ]]; then
+    # Compare by package name (strip store hash) rather than full path so that
+    # pseudo-cross builds — where BUILD and HOST both produce
+    # qtbase-x86_64-unknown-linux-gnu-5.15.18-dev but with different hashes —
+    # are not wrongly rejected.  Genuine mismatches (5.14 vs 5.15) still fail.
+    _qt_name_cur="@dev@"; _qt_name_cur="${_qt_name_cur##*/}"; _qt_name_cur="${_qt_name_cur#*-}"
+    _qt_name_set="$__nix_qtbase"; _qt_name_set="${_qt_name_set##*/}"; _qt_name_set="${_qt_name_set#*-}"
+    if [[ "$_qt_name_cur" != "$_qt_name_set" ]]; then
         echo >&2 "Error: detected mismatched Qt dependencies:"
         echo >&2 "    @dev@"
         echo >&2 "    $__nix_qtbase"
