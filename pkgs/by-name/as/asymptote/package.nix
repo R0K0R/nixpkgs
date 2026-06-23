@@ -154,7 +154,11 @@ stdenv.mkDerivation (finalAttrs: {
   # do not use bundled libgc.so
   configureFlags = [ "--enable-gc=system" ];
 
-  env.NIX_CFLAGS_COMPILE = "-I${boehmgc.dev}/include/gc";
+  env.NIX_CFLAGS_COMPILE = "-I${boehmgc.dev}/include/gc"
+    # libtirpc puts rpc/ headers under include/tirpc/; configure's PKG_CONFIG
+    # macro calls bare pkg-config (not $PKG_CONFIG) so the cross wrapper is
+    # bypassed and -I…/tirpc is never added.  Inject it unconditionally here.
+    + lib.optionalString stdenv.hostPlatform.isLinux " -I${libtirpc.dev}/include/tirpc";
 
   postInstall = ''
     rm "$out"/bin/xasy
