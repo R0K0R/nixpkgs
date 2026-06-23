@@ -34,6 +34,12 @@ buildNpmPackage rec {
     # Build the docstubs
     cp -r packages/pyright-internal/typeshed-fallback docstubs
     docify docstubs/stdlib --builtins-only --in-place
+  ''
+  # In cross builds node-gyp can't find the cross pkg-config wrapper to build
+  # the keytar native addon.  Remove binding.gyp so node-gyp skips the native
+  # build; keytar credential-storage is not needed for the LSP core.
+  + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform) ''
+    rm -f node_modules/keytar/binding.gyp
   '';
 
   nativeBuildInputs = [
