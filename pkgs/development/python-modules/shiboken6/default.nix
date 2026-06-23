@@ -47,6 +47,11 @@ stdenv'.mkDerivation (finalAttrs: {
     # cross-debug/41 (Python_EXECUTABLE) + cross-debug/42 (Python3_EXECUTABLE).
     "-DPython_EXECUTABLE=${python.pythonOnBuildForHost.interpreter}"
     "-DPython3_EXECUTABLE=${python.pythonOnBuildForHost.interpreter}"
+    # When SHIBOKEN_IS_CROSS_BUILD=TRUE, libshiboken/CMakeLists.txt uses
+    # ${QFP_PYTHON_HOST_PATH} (not Python_EXECUTABLE) for embedding_generator.py.
+    # Without this, the add_custom_command becomes "-E script.py" → command not found.
+    # cross-debug/43.
+    "-DQFP_PYTHON_HOST_PATH=${python.pythonOnBuildForHost.interpreter}"
   ];
 
   # We intentionally use single quotes around `${BASH}` since it expands from a CMake
