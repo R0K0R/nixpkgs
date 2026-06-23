@@ -63,13 +63,22 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   postPatch = ''
-    # blueprint-compiler 0.20.4 crashes (SIGSEGV) when a GStrv boxed type is
-    # assigned to string[] (ArrayType): ArrayType.assignable_to checks
-    # isinstance(other, ArrayType) which is false for GStrv, issues a warning,
-    # then code-gen crashes on the null type.  The cast is only used for type
-    # validation; removing it makes the return type unknown (None) so the check
-    # is skipped entirely and the generated XML is identical.
-    sed -i 's/) as <\$GStrv>;/);/' src/resources/ui/nautilus-batch-rename-dialog.blp
+    # blueprint-compiler 0.20.4 SIGSEGVs in GLib type-system cleanup after
+    # writing XML to a non-TTY fd (pipe/file), which is always the case in the
+    # nix sandbox.  strace confirms the XML is written correctly before the
+    # crash.  Pre-compile every .blp → .ui here, ignoring the non-zero exit
+    # (killed by SIGSEGV), then verify each output file is non-empty.
+    # Patch the meson custom_target to cp the pre-compiled files instead of
+    # re-invoking blueprint-compiler (which would SIGSEGV and abort the build).
+    for blp in src/resources/ui/*.blp; do
+      ui="''${blp%.blp}.ui"
+      blueprint-compiler compile "$blp" > "$ui" || true
+      [ -s "$ui" ] || { echo "blueprint-compiler produced empty $ui"; exit 1; }
+    done
+    substituteInPlace src/resources/meson.build \
+      --replace-fail \
+        "command: [blueprint_cmd, 'batch-compile', '--minify', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@']," \
+        "command: ['sh', '-c', 'mkdir -p \"\$1/ui\" && cp \"\$2/ui/\"*.ui \"\$1/ui/\"', 'sh', '@OUTPUT@', '@CURRENT_SOURCE_DIR@'],"
   '';
 
   nativeBuildInputs = [
