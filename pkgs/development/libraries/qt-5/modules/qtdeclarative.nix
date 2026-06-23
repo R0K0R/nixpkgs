@@ -17,6 +17,9 @@ qtModule {
     "dev"
     "bin"
   ];
+  postPatch = ''
+    sed -i '/#include <QCryptographicHash>/a #include <cstdint>' src/qml/compiler/qv4compiler.cpp
+  '';
   preConfigure = ''
     NIX_CFLAGS_COMPILE+=" -DNIXPKGS_QML2_IMPORT_PREFIX=\"$qtQmlPrefix\""
   '';
