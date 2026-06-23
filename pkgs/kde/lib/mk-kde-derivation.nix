@@ -11,6 +11,10 @@ self:
   jq,
 }:
 let
+  # Reliable cross-or-pseudo-cross detection (see cross-debug/31 & qtModule.nix).
+  isCrossOrPseudo =
+    (stdenv.isPseudoCross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+
   dependencies = (lib.importJSON ../generated/dependencies.json).dependencies;
   projectInfo = lib.importJSON ../generated/projects.json;
 
@@ -167,7 +171,24 @@ let
     propagatedBuildInputs = deps ++ extraPropagatedBuildInputs;
     strictDeps = true;
 
-    cmakeFlags = [ "-DQT_MAJOR_VERSION=6" ] ++ extraCmakeFlags;
+    cmakeFlags = [ "-DQT_MAJOR_VERSION=6" ]
+      # In pseudo-cross and real cross builds, Qt cmake modules look for *Tools
+      # packages (rcc, moc, qmlcachegen, qsb, etc.) in CMAKE_PREFIX_PATH, which
+      # in the build environment only contains HOST Qt paths.  HOST Qt's *Tools
+      # packages contain meteorlake-compiled binaries that crash on AMD builders
+      # (waitpkg SIGABRT).  Point cmake at BUILD-platform qt6 *Tools dirs.
+      # Note: pkgsBuildBuild here is the global pkgs.pkgsBuildBuild (not the KDE
+      # splice), so Qt packages are under pkgsBuildBuild.qt6.* (not top-level).
+      ++ lib.optionals isCrossOrPseudo [
+        "-DQt6CoreTools_DIR=${pkgsBuildBuild.qt6.qtbase}/lib/cmake/Qt6CoreTools"
+        "-DQt6QmlTools_DIR=${pkgsBuildBuild.qt6.qtdeclarative}/lib/cmake/Qt6QmlTools"
+        "-DQt6QuickTools_DIR=${pkgsBuildBuild.qt6.qtdeclarative}/lib/cmake/Qt6QuickTools"
+        "-DQt6ShaderToolsTools_DIR=${pkgsBuildBuild.qt6.qtshadertools}/lib/cmake/Qt6ShaderToolsTools"
+        "-DQt6ScxmlTools_DIR=${pkgsBuildBuild.qt6.qtscxml}/lib/cmake/Qt6ScxmlTools"
+        "-DQt6RemoteObjectsTools_DIR=${pkgsBuildBuild.qt6.qtremoteobjects}/lib/cmake/Qt6RemoteObjectsTools"
+        "-DQt6Quick3DTools_DIR=${pkgsBuildBuild.qt6.qtquick3d}/lib/cmake/Qt6Quick3DTools"
+      ]
+      ++ extraCmakeFlags;
 
     doInstallCheck = true;
 

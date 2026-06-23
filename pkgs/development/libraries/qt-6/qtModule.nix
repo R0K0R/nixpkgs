@@ -17,6 +17,13 @@ let
   inherit (args) pname;
   version = args.version or srcs.${pname}.version;
   src = args.src or srcs.${pname}.src;
+  # isCrossOrPseudo is unreliable for pseudo-cross
+  # (Nix attrset comparison short-circuits on thunks; returns same hash as no
+  # condition — see cross-debug/31 iteration 2).  Use explicit booleans:
+  #   isPseudoCross — same system tuple, different gcc.arch (canExecute = true)
+  #   !canExecute   — real cross (aarch64 etc.; canExecute = false)
+  isCrossOrPseudo =
+    (stdenv.isPseudoCross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 in
 stdenv.mkDerivation (
   args
@@ -53,7 +60,7 @@ stdenv.mkDerivation (
     # NOTE: this flag is actually overridden by Qt's own cmake infrastructure
     # (QtBuildInternalsExtra.cmake FORCE-sets INSTALL_LIBDIR="lib") and has no
     # effect in practice, but is kept harmlessly for documentation purposes.
-    ++ lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform) [
+    ++ lib.optionals (isCrossOrPseudo) [
       "-DCMAKE_INSTALL_LIBDIR=${placeholder "dev"}/lib"
       # Qt6CoreConfig.cmake declares a tool_dep on Qt6CoreTools (rcc, moc, uic).
       # Without this, cmake resolves Qt6::rcc to the HOST platform rcc binary,
@@ -111,38 +118,38 @@ stdenv.mkDerivation (
       # Each module only writes flags for its own *Tools package. The Nix-level
       # pname == "..." conditions are evaluated lazily at eval time, so accessing
       # pkgsBuildBuild.qt6.qtscxml here is only evaluated when pname IS qtscxml.
-      + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform && pname == "qtbase") ''
+      + lib.optionalString (isCrossOrPseudo && pname == "qtbase") ''
         if [[ -n "''${dev:-}" ]]; then
           mkdir -p "$dev/nix-support"
           echo "-DQt6CoreTools_DIR=${pkgsBuildBuild.qt6.qtbase}/lib/cmake/Qt6CoreTools" >> "$dev/nix-support/cmake-cross-helper-flags"
         fi
       ''
-      + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform && pname == "qtdeclarative") ''
+      + lib.optionalString (isCrossOrPseudo && pname == "qtdeclarative") ''
         if [[ -n "''${dev:-}" ]]; then
           mkdir -p "$dev/nix-support"
           echo "-DQt6QmlTools_DIR=${pkgsBuildBuild.qt6.qtdeclarative}/lib/cmake/Qt6QmlTools" >> "$dev/nix-support/cmake-cross-helper-flags"
           echo "-DQt6QuickTools_DIR=${pkgsBuildBuild.qt6.qtdeclarative}/lib/cmake/Qt6QuickTools" >> "$dev/nix-support/cmake-cross-helper-flags"
         fi
       ''
-      + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform && pname == "qtshadertools") ''
+      + lib.optionalString (isCrossOrPseudo && pname == "qtshadertools") ''
         if [[ -n "''${dev:-}" ]]; then
           mkdir -p "$dev/nix-support"
           echo "-DQt6ShaderToolsTools_DIR=${pkgsBuildBuild.qt6.qtshadertools}/lib/cmake/Qt6ShaderToolsTools" >> "$dev/nix-support/cmake-cross-helper-flags"
         fi
       ''
-      + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform && pname == "qtscxml") ''
+      + lib.optionalString (isCrossOrPseudo && pname == "qtscxml") ''
         if [[ -n "''${dev:-}" ]]; then
           mkdir -p "$dev/nix-support"
           echo "-DQt6ScxmlTools_DIR=${pkgsBuildBuild.qt6.qtscxml}/lib/cmake/Qt6ScxmlTools" >> "$dev/nix-support/cmake-cross-helper-flags"
         fi
       ''
-      + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform && pname == "qtremoteobjects") ''
+      + lib.optionalString (isCrossOrPseudo && pname == "qtremoteobjects") ''
         if [[ -n "''${dev:-}" ]]; then
           mkdir -p "$dev/nix-support"
           echo "-DQt6RemoteObjectsTools_DIR=${pkgsBuildBuild.qt6.qtremoteobjects}/lib/cmake/Qt6RemoteObjectsTools" >> "$dev/nix-support/cmake-cross-helper-flags"
         fi
       ''
-      + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform && pname == "qtquick3d") ''
+      + lib.optionalString (isCrossOrPseudo && pname == "qtquick3d") ''
         if [[ -n "''${dev:-}" ]]; then
           mkdir -p "$dev/nix-support"
           echo "-DQt6Quick3DTools_DIR=${pkgsBuildBuild.qt6.qtquick3d}/lib/cmake/Qt6Quick3DTools" >> "$dev/nix-support/cmake-cross-helper-flags"
