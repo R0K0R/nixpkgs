@@ -327,16 +327,27 @@ stdenv.mkDerivation {
   # cstdlib's #include_next <stdlib.h> then can't find stdlib.h because glibc
   # ends up before the C++ headers in the search list.
   #
-  # Fix: inject the cross GCC's C++ headers as -isystem in NIX_CFLAGS_COMPILE_BEFORE
-  # so they land in extraBefore (before cmake's -isystem glibc in the invocation).
-  # -isystem (not -I) is required: -I for a built-in system dir is silently
-  # deduplicated by GCC with a warning; -isystem is respected in order.
-  # Both the generic dir and the target-specific dir (for bits/c++config.h) are
-  # needed.
-  env.NIX_CFLAGS_COMPILE_BEFORE =
+  # Fix: inject the cross GCC's C++ headers via NIX_CXXFLAGS_COMPILE_BEFORE
+  # (C++ only — see add-flags.sh + cc-wrapper.sh) so they land in extraBefore
+  # before cmake's -isystem glibc.  NIX_CFLAGS_COMPILE_BEFORE would bleed into
+  # C compilation, causing GCC 15's c++/stdatomic.h (which only defines C++23
+  # using-decls) to shadow the real C11 <stdatomic.h>, breaking forkfd_c11.h.
+  # -isystem (not -I): -I for a built-in system dir is silently deduplicated by
+  # GCC; -isystem is respected in order.  Both generic and target-specific dirs
+  # are required (the latter provides bits/c++config.h).
+  env.NIX_CXXFLAGS_COMPILE_BEFORE =
     lib.optionalString (isCrossBuild || (stdenv.isPseudoCross or false))
       ("-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}"
       + " -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config}");
+
+  # Qt 6.11 compiles qatomicwait.cpp with -mwaitpkg (UMWAIT instruction) as part
+  # of libQt6Core, making waitpkg a *required* CPU feature in every tool that
+  # links it (rcc, qmlimportscanner, ...).  Native build tools must run on the
+  # build machine (yulee, AMD/znver5) which has no waitpkg.  Strip the flag from
+  # generated ninja rules after configure so native tools work on any x86_64 host.
+  postConfigure = lib.optionalString (!isCrossBuild) ''
+    find . -name '*.ninja' | xargs sed -i 's/ -mwaitpkg//g'
+  '';
 
   outputs = [
     "out"

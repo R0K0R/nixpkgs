@@ -218,6 +218,12 @@ source @out@/nix-support/add-hardening.sh
 # Add the flags for the C compiler proper.
 extraAfter=(${hardeningCFlagsAfter[@]+"${hardeningCFlagsAfter[@]}"} $NIX_CFLAGS_COMPILE_@suffixSalt@)
 extraBefore=(${hardeningCFlagsBefore[@]+"${hardeningCFlagsBefore[@]}"} $NIX_CFLAGS_COMPILE_BEFORE_@suffixSalt@)
+# NIX_CXXFLAGS_COMPILE_BEFORE is like NIX_CFLAGS_COMPILE_BEFORE but C++ only.
+# Use it for flags that must precede cmake's -isystem but would break C
+# compilation (e.g. GCC C++ system header dirs that shadow C11 <stdatomic.h>).
+if [[ "$isCxx" = 1 ]]; then
+    extraBefore+=($NIX_CXXFLAGS_COMPILE_BEFORE_@suffixSalt@)
+fi
 
 if [ "$dontLink" != 1 ]; then
     linkType=$(checkLinkType $NIX_LDFLAGS_BEFORE_@suffixSalt@ "${params[@]}" ${NIX_CFLAGS_LINK_@suffixSalt@:-} $NIX_LDFLAGS_@suffixSalt@)
