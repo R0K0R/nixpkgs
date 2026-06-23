@@ -8,6 +8,7 @@ self:
   qt6,
   python3,
   python3Packages,
+  pkgsBuildBuild,
   jq,
 }:
 let
