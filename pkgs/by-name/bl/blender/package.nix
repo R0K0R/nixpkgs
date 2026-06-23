@@ -259,7 +259,9 @@ stdenv'.mkDerivation (finalAttrs: {
           # Extract the PKG_CONFIG_PATH_<salt> variable name used by the HOST wrapper.
           pc_salt_var="$(grep -oE 'PKG_CONFIG_PATH_[A-Za-z0-9_]+' "$host_pc_bin" 2>/dev/null | head -1 || true)"
           if [ -n "$pc_salt_var" ]; then
-            eval "export $pc_salt_var=\"\$ws_pcdir:\${$pc_salt_var}\""
+            # \$$ → bash double-quote escaping: \$ produces literal $, then
+            # $pc_salt_var expands to the salt var name → indirect reference.
+            eval "export $pc_salt_var=\"$ws_pcdir:\$$pc_salt_var\""
           fi
         fi
       fi
