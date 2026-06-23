@@ -250,18 +250,17 @@ stdenv'.mkDerivation (finalAttrs: {
       # the BUILD wayland-scanner pkgconfig dir directly to that salt-keyed variable,
       # so the HOST wrapper passes the right PKG_CONFIG_PATH to the underlying binary.
       # cross-debug-2/16.
-      echo "[pseudo-cross wayland-scanner fix] PATH=$PATH" >&2
+      # wayland-scanner binary is in a -bin output; the .pc file is in a
+      # different output (-dev or default).  Locate wayland-scanner.pc
+      # directly rather than deriving the path from the binary prefix.
       ws_bin="$(command -v wayland-scanner 2>/dev/null || true)"
-      echo "[pseudo-cross wayland-scanner fix] ws_bin=$ws_bin" >&2
       if [ -n "$ws_bin" ]; then
-        ws_prefix="$(dirname "$(dirname "$ws_bin")")"
-        ws_pcdir="$ws_prefix/lib/pkgconfig"
-        echo "[pseudo-cross wayland-scanner fix] ws_pcdir=$ws_pcdir" >&2
+        ws_pcdir="$(find /nix/store -maxdepth 4 -name "wayland-scanner.pc" 2>/dev/null \
+                    | head -1 | xargs -r dirname)"
         host_pc_bin="$(command -v x86_64-unknown-linux-gnu-pkg-config 2>/dev/null || true)"
-        echo "[pseudo-cross wayland-scanner fix] host_pc_bin=$host_pc_bin" >&2
-        if [ -n "$host_pc_bin" ]; then
+        if [ -n "$ws_pcdir" ] && [ -n "$host_pc_bin" ]; then
+          # Extract the PKG_CONFIG_PATH_<salt> variable name used by the HOST wrapper.
           pc_salt_var="$(grep -oE 'PKG_CONFIG_PATH_[A-Za-z0-9_]+' "$host_pc_bin" 2>/dev/null | head -1 || true)"
-          echo "[pseudo-cross wayland-scanner fix] pc_salt_var=$pc_salt_var" >&2
           if [ -n "$pc_salt_var" ]; then
             eval "export $pc_salt_var=\"$ws_pcdir:\$$pc_salt_var\""
           fi
