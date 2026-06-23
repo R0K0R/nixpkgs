@@ -40,11 +40,13 @@ stdenv'.mkDerivation (finalAttrs: {
     "-DBUILD_TESTS=OFF"
     "-DNUMPY_INCLUDE_DIR=${numpy.coreIncludeDir}"
     "-Dis_pyside6_superproject_build=1"
-    # shiboken6 calls find_package(Python ...) (not Python3), so the hint must
-    # use Python_EXECUTABLE (not Python3_EXECUTABLE).  Without this, cmake
-    # cross-compilation mode can't find the interpreter and embedding_generator.py
-    # is invoked as "-E script.py" → sh: -E: command not found (cross-debug/41).
+    # shiboken6's cmake uses both find_package(Python) and ${Python3_EXECUTABLE}
+    # in add_custom_command.  In cross mode cmake won't search PATH for either.
+    # Set both variables explicitly so embedding_generator.py is invoked correctly
+    # (otherwise the command becomes "-E script.py" → sh: -E: command not found).
+    # cross-debug/41 (Python_EXECUTABLE) + cross-debug/42 (Python3_EXECUTABLE).
     "-DPython_EXECUTABLE=${python.pythonOnBuildForHost.interpreter}"
+    "-DPython3_EXECUTABLE=${python.pythonOnBuildForHost.interpreter}"
   ];
 
   # We intentionally use single quotes around `${BASH}` since it expands from a CMake
