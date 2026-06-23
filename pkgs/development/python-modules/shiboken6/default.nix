@@ -69,7 +69,11 @@ stdenv'.mkDerivation (finalAttrs: {
   postInstall = ''
     cd ../../..
     chmod +w .
-    python3 setup.py egg_info --build-type=shiboken6
+    # --qt-target-path suppresses the "No value provided to --qtpaths" check
+    # in options.py:_determine_defaults_and_check(); egg_info doesn't use Qt
+    # but pyside6's setup.py always validates qtpaths unless qt-target-path is set.
+    python3 setup.py egg_info --build-type=shiboken6 \
+      --qt-target-path ${python.pkgs.qt6.qtbase}
     cp -r shiboken6.egg-info $out/${python.sitePackages}/
   '';
 
