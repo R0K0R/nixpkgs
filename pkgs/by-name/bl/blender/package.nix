@@ -223,16 +223,33 @@ stdenv'.mkDerivation (finalAttrs: {
     (lib.cmakeFeature "SSE2NEON_INCLUDE_DIR" "${sse2neon}/include")
   ];
 
-  preConfigure = ''
-    (
-      expected_python_version=$(grep -E --only-matching 'set\(_PYTHON_VERSION_SUPPORTED [0-9.]+\)' build_files/cmake/Modules/FindPythonLibsUnix.cmake | grep -E --only-matching '[0-9.]+')
-      actual_python_version="${python3.pythonVersion}"
-      if ! [[ "$actual_python_version" = "$expected_python_version" ]]; then
-        echo "wrong Python version, expected '$expected_python_version', got '$actual_python_version'" >&2
-        exit 1
+  preConfigure =
+    ''
+      (
+        expected_python_version=$(grep -E --only-matching 'set\(_PYTHON_VERSION_SUPPORTED [0-9.]+\)' build_files/cmake/Modules/FindPythonLibsUnix.cmake | grep -E --only-matching '[0-9.]+')
+        actual_python_version="${python3.pythonVersion}"
+        if ! [[ "$actual_python_version" = "$expected_python_version" ]]; then
+          echo "wrong Python version, expected '$expected_python_version', got '$actual_python_version'" >&2
+          exit 1
+        fi
+      )
+    ''
+    + lib.optionalString (stdenv.isPseudoCross or false) ''
+      # In pseudo-cross (same ISA, different gcc.arch), cmake's FindPkgConfig module
+      # picks up the HOST-platform pkg-config wrapper (set via PKG_CONFIG env var by
+      # F4's env-hook relax), which only searches HOST pkgconfig paths.
+      # wayland-scanner is a BUILD-time code generator in nativeBuildInputs; its
+      # .pc file is only in the BUILD-platform pkgconfig path.  pkg_check_modules
+      # (WAYLAND_SCANNER wayland-scanner) therefore fails even though the binary is
+      # in PATH.  Add the BUILD wayland-scanner prefix to PKG_CONFIG_PATH so the
+      # pkg-config check succeeds and cmake finds the correct BUILD-platform binary.
+      # cross-debug-2/16.
+      ws_bin="$(command -v wayland-scanner || true)"
+      if [ -n "$ws_bin" ]; then
+        ws_prefix="$(dirname "$(dirname "$ws_bin")")"
+        export PKG_CONFIG_PATH="$ws_prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
       fi
-    )
-  '';
+    '';
 
   nativeBuildInputs = [
     cmake
