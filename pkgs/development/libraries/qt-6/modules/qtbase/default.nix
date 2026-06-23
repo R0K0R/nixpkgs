@@ -324,7 +324,9 @@ stdenv.mkDerivation {
     # it before the cross GCC's C++ headers.  cstdlib's #include_next <stdlib.h>
     # then can't find stdlib.h (it searches after its own position, but glibc is
     # now before it).  Pin the C++ header dir first with -I so it stays in front.
-    + lib.optionalString isCrossBuild
+    # Use hostPlatform != buildPlatform (not isCrossBuild) so this also fires in
+    # pseudo-cross where canExecute is true but the cross GCC is still used.
+    + lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform)
       " -I${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}";
 
   outputs = [
