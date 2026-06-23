@@ -247,7 +247,7 @@ stdenv'.mkDerivation (finalAttrs: {
       ws_bin="$(command -v wayland-scanner || true)"
       if [ -n "$ws_bin" ]; then
         ws_prefix="$(dirname "$(dirname "$ws_bin")")"
-        export PKG_CONFIG_PATH="$ws_prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+        export PKG_CONFIG_PATH="$ws_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
       fi
     '';
 
