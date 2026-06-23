@@ -172,15 +172,6 @@ buildPythonApplication rec {
         --disable-link-time-optimization \
         ${commonOptions}
       '';
-      # In pseudo-cross (same ISA) the TARGET python runs on the build machine.
-      # Using it for setup.py makes kitty link against TARGET libpython, so the
-      # RPATH in the output contains TARGET python (not BUILD python), avoiding
-      # the disallowedReferences failure from mk-python-derivation.
-      pythonForSetup =
-        if stdenv.buildPlatform.system == stdenv.hostPlatform.system then
-          python
-        else
-          python.pythonOnBuildForHost;
     in
     ''
       runHook preBuild
@@ -198,13 +189,13 @@ buildPythonApplication rec {
           ''
         else
           ''
-            ${pythonForSetup.interpreter} setup.py linux-package \
+            ${python.pythonOnBuildForHost.interpreter} setup.py linux-package \
             --egl-library='${lib.getLib libGL}/lib/libEGL.so.1' \
             --startup-notification-library='${libstartup_notification}/lib/libstartup-notification-1.so' \
             --canberra-library='${libcanberra}/lib/libcanberra.so' \
             --fontconfig-library='${fontconfig.lib}/lib/libfontconfig.so' \
             ${commonOptions}
-            ${pythonForSetup.interpreter} setup.py build-launcher
+            ${python.pythonOnBuildForHost.interpreter} setup.py build-launcher
           ''
       }
       runHook postBuild
