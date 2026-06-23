@@ -319,15 +319,24 @@ stdenv.mkDerivation {
     qttranslations != null && !isCrossBuild
   ) "-DINSTALL_TRANSLATIONSDIR=${qttranslations}/translations";
 
-  env.NIX_CFLAGS_COMPILE = "-DNIXPKGS_QT_PLUGIN_PREFIX=\"${qtPluginPrefix}\""
-    # CMake re-emits glibc's include path as an explicit -isystem flag, moving
-    # it before the cross GCC's C++ headers.  cstdlib's #include_next <stdlib.h>
-    # then can't find stdlib.h (it searches after its own position, but glibc is
-    # now before it).  Pin the C++ header dir first with -I so it stays in front.
-    # Use isCrossBuild || isPseudoCross (not hostPlatform != buildPlatform) because
-    # comparing platform attrsets with != is unreliable; isPseudoCross is a boolean.
-    + lib.optionalString (isCrossBuild || (stdenv.isPseudoCross or false))
-      " -I${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}";
+  env.NIX_CFLAGS_COMPILE = "-DNIXPKGS_QT_PLUGIN_PREFIX=\"${qtPluginPrefix}\"";
+
+  # CMake re-emits glibc's include path as an explicit -isystem, which GCC
+  # promotes before its own built-in C++ system dirs (the explicit -isystem
+  # takes priority and GCC deduplicates the built-in glibc entry away).
+  # cstdlib's #include_next <stdlib.h> then can't find stdlib.h because glibc
+  # ends up before the C++ headers in the search list.
+  #
+  # Fix: inject the cross GCC's C++ headers as -isystem in NIX_CFLAGS_COMPILE_BEFORE
+  # so they land in extraBefore (before cmake's -isystem glibc in the invocation).
+  # -isystem (not -I) is required: -I for a built-in system dir is silently
+  # deduplicated by GCC with a warning; -isystem is respected in order.
+  # Both the generic dir and the target-specific dir (for bits/c++config.h) are
+  # needed.
+  env.NIX_CFLAGS_COMPILE_BEFORE =
+    lib.optionalString (isCrossBuild || (stdenv.isPseudoCross or false))
+      ("-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}"
+      + " -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config}");
 
   outputs = [
     "out"
