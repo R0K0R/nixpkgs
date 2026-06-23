@@ -1,6 +1,12 @@
 if [[ -n "${__nix_qtbase-}" ]]; then
     # Throw an error if a different version of Qt was already set up.
-    if [[ "$__nix_qtbase" != "@qtbaseOut@" ]]; then
+    # In pseudo-cross (same ISA, different gcc.arch) the F4 strictDeps relax
+    # causes both BUILD-platform and HOST-platform qtbase setup hooks to be
+    # sourced.  BUILD qtbase is needed for cmake tool resolution (rcc, moc,
+    # qmlcachegen etc.) while HOST qtbase is the actual library being linked.
+    # The two are ABI-compatible (same x86_64 ISA), so the conflict is a
+    # false positive.  Suppress it when NIX_IS_PSEUDO_CROSS=1.
+    if [[ "$__nix_qtbase" != "@qtbaseOut@" && "${NIX_IS_PSEUDO_CROSS-}" != "1" ]]; then
         echo >&2 "Error: detected mismatched Qt dependencies:"
         echo >&2 "    @qtbaseOut@"
         echo >&2 "    $__nix_qtbase"
@@ -38,7 +44,7 @@ else # Only set up Qt once.
     declare -g qttoolsPathSeen=
     qtToolsHook() {
         if [ -f "$1/libexec/qhelpgenerator" ]; then
-            if [[ -n "${qtToolsPathSeen:-}" && "${qttoolsPathSeen:-}" != "$1" ]]; then
+            if [[ -n "${qtToolsPathSeen:-}" && "${qttoolsPathSeen:-}" != "$1" && "${NIX_IS_PSEUDO_CROSS-}" != "1" ]]; then
                 echo >&2 "Error: detected mismatched Qt dependencies:"
                 echo >&2 "    $1"
                 echo >&2 "    $qttoolsPathSeen"
