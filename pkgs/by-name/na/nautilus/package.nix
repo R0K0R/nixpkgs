@@ -62,6 +62,16 @@ stdenv.mkDerivation (finalAttrs: {
     ./extension_dir.patch
   ];
 
+  postPatch = ''
+    # blueprint-compiler 0.20.4 crashes (SIGSEGV) when a GStrv boxed type is
+    # assigned to string[] (ArrayType): ArrayType.assignable_to checks
+    # isinstance(other, ArrayType) which is false for GStrv, issues a warning,
+    # then code-gen crashes on the null type.  The cast is only used for type
+    # validation; removing it makes the return type unknown (None) so the check
+    # is skipped entirely and the generated XML is identical.
+    sed -i 's/) as <\$GStrv>;/);/' src/resources/ui/nautilus-batch-rename-dialog.blp
+  '';
+
   nativeBuildInputs = [
     blueprint-compiler
     desktop-file-utils
