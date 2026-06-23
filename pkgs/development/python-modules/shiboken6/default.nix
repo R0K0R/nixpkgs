@@ -25,15 +25,6 @@ stdenv'.mkDerivation (finalAttrs: {
       ps.packaging
       ps.setuptools
     ]))
-  ]
-  # In cross/pseudo-cross builds buildInputs are HOST packages and their bin/
-  # dirs are not in PATH.  postInstall's `python3 setup.py egg_info` invokes
-  # pyside6's setup_runner which calls options.find_qtpaths() → searches PATH
-  # for qtpaths6.  Without this, the check fails with "No value provided to
-  # --qtpaths".  qtpaths6 lives in qtbase/bin so we add qtbase to
-  # nativeBuildInputs for cross builds to make it findable.
-  ++ lib.optionals (stdenv.isPseudoCross or (!stdenv.buildPlatform.canExecute stdenv.hostPlatform)) [
-    python.pkgs.qt6.qtbase
   ];
 
   propagatedNativeBuildInputs = [
@@ -75,12 +66,25 @@ stdenv'.mkDerivation (finalAttrs: {
       -exec touch -d "1980-01-01T00:00Z" {} \;
   '';
 
-  postInstall = ''
-    cd ../../..
-    chmod +w .
-    python3 setup.py egg_info --build-type=shiboken6
-    cp -r shiboken6.egg-info $out/${python.sitePackages}/
-  '';
+  postInstall =
+    if (stdenv.isPseudoCross or (!stdenv.buildPlatform.canExecute stdenv.hostPlatform)) then ''
+      # Cross/pseudo-cross: setup.py egg_info triggers qtinfo.py which runs a
+      # cmake config test requiring Qt6CoreTools in CMAKE_PREFIX_PATH.
+      # Qt6CoreTools only exists in the BUILD-platform qtbase; HOST qtbase (which
+      # is in CMAKE_PREFIX_PATH during cross builds) does not ship it.
+      # Write the egg-info directly to avoid the cmake probe entirely.
+      eggdir=$out/${python.sitePackages}/shiboken6.egg-info
+      mkdir -p "$eggdir"
+      printf 'Metadata-Version: 2.1\nName: shiboken6\nVersion: ${finalAttrs.version}\nSummary: Python / C++ bindings helper module\nHome-page: https://wiki.qt.io/Qt_for_Python\n' \
+        > "$eggdir/PKG-INFO"
+      printf 'shiboken6\n' > "$eggdir/top_level.txt"
+      touch "$eggdir/dependency_links.txt"
+    '' else ''
+      cd ../../..
+      chmod +w .
+      python3 setup.py egg_info --build-type=shiboken6
+      cp -r shiboken6.egg-info $out/${python.sitePackages}/
+    '';
 
   dontWrapQtApps = true;
 
