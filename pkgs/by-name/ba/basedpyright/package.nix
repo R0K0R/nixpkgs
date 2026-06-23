@@ -30,16 +30,16 @@ buildNpmPackage rec {
   npmDepsHash = "sha256-humpJB+fv3+PITcPCz3uY2jNANb3P7sXy0lFP8Eg58I=";
   npmWorkspace = "packages/pyright";
 
+  # npmConfigHook runs `npm rebuild` in postPatchHooks, before preBuild.
+  # In cross builds the keytar native addon fails because node-gyp can't find
+  # the prefixed cross pkg-config.  keytar credential-storage is not needed
+  # for the LSP core; skip all install scripts during rebuild in cross builds.
+  npmRebuildFlags = lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform) [ "--ignore-scripts" ];
+
   preBuild = ''
     # Build the docstubs
     cp -r packages/pyright-internal/typeshed-fallback docstubs
     docify docstubs/stdlib --builtins-only --in-place
-  ''
-  # In cross builds node-gyp can't find the cross pkg-config wrapper to build
-  # the keytar native addon.  Remove binding.gyp so node-gyp skips the native
-  # build; keytar credential-storage is not needed for the LSP core.
-  + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform) ''
-    rm -f node_modules/keytar/binding.gyp
   '';
 
   nativeBuildInputs = [
