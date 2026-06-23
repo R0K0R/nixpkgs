@@ -25,6 +25,15 @@ stdenv'.mkDerivation (finalAttrs: {
       ps.packaging
       ps.setuptools
     ]))
+  ]
+  # In cross/pseudo-cross builds buildInputs are HOST packages and their bin/
+  # dirs are not in PATH.  postInstall's `python3 setup.py egg_info` invokes
+  # pyside6's setup_runner which calls options.find_qtpaths() → searches PATH
+  # for qtpaths6.  Without this, the check fails with "No value provided to
+  # --qtpaths".  qtpaths6 lives in qtbase/bin so we add qtbase to
+  # nativeBuildInputs for cross builds to make it findable.
+  ++ lib.optionals (stdenv.isPseudoCross or (!stdenv.buildPlatform.canExecute stdenv.hostPlatform)) [
+    python.pkgs.qt6.qtbase
   ];
 
   propagatedNativeBuildInputs = [
@@ -69,11 +78,7 @@ stdenv'.mkDerivation (finalAttrs: {
   postInstall = ''
     cd ../../..
     chmod +w .
-    # --qt-target-path suppresses the "No value provided to --qtpaths" check
-    # in options.py:_determine_defaults_and_check(); egg_info doesn't use Qt
-    # but pyside6's setup.py always validates qtpaths unless qt-target-path is set.
-    python3 setup.py egg_info --build-type=shiboken6 \
-      --qt-target-path ${python.pkgs.qt6.qtbase}
+    python3 setup.py egg_info --build-type=shiboken6
     cp -r shiboken6.egg-info $out/${python.sitePackages}/
   '';
 
