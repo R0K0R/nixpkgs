@@ -234,36 +234,19 @@ stdenv'.mkDerivation (finalAttrs: {
         fi
       )
     ''
-    + lib.optionalString (stdenv.isPseudoCross or false) ''
-      # In pseudo-cross (same ISA, different gcc.arch), cmake's FindPkgConfig module
-      # picks up the HOST-platform pkg-config wrapper via the PKG_CONFIG env var set
-      # by F4's env-hook relax.  The HOST wrapper replaces PKG_CONFIG_PATH with its
-      # own salt-keyed variable (PKG_CONFIG_PATH_<salt>) which only contains HOST
-      # pkgconfig paths.  Exporting plain PKG_CONFIG_PATH has no effect.
-      #
-      # wayland-scanner is a BUILD-time code generator (in nativeBuildInputs); its
-      # .pc file is only in the BUILD pkgconfig path.  pkg_check_modules
-      # (WAYLAND_SCANNER wayland-scanner) therefore fails even though the binary is
-      # in PATH and cmake could find it via CMAKE_PROGRAM_PATH.
-      #
-      # Fix: read the salt variable name from the HOST wrapper script and prepend
-      # the BUILD wayland-scanner pkgconfig dir directly to that salt-keyed variable,
-      # so the HOST wrapper passes the right PKG_CONFIG_PATH to the underlying binary.
-      # cross-debug-2/16.
-      # wayland-scanner binary is in a -bin output; the .pc file is in a
-      # different output (-dev or default).  Locate wayland-scanner.pc
-      # directly rather than deriving the path from the binary prefix.
-      ws_bin="$(command -v wayland-scanner 2>/dev/null || true)"
-      if [ -n "$ws_bin" ]; then
-        ws_pcdir="$(find /nix/store -maxdepth 4 -name "wayland-scanner.pc" 2>/dev/null \
-                    | head -1 | xargs -r dirname)"
-        host_pc_bin="$(command -v x86_64-unknown-linux-gnu-pkg-config 2>/dev/null || true)"
-        if [ -n "$ws_pcdir" ] && [ -n "$host_pc_bin" ]; then
-          # Extract the PKG_CONFIG_PATH_<salt> variable name used by the HOST wrapper.
-          pc_salt_var="$(grep -oE 'PKG_CONFIG_PATH_[A-Za-z0-9_]+' "$host_pc_bin" 2>/dev/null | head -1 || true)"
-          if [ -n "$pc_salt_var" ]; then
-            eval "export $pc_salt_var=\"$ws_pcdir:\$$pc_salt_var\""
-          fi
+    + lib.optionalString (stdenv.isPseudoCross or false && waylandSupport) ''
+      # In pseudo-cross, cmake uses the HOST pkg-config wrapper (set via PKG_CONFIG
+      # by F4's env-hook relax).  The HOST wrapper's salt-keyed PKG_CONFIG_PATH only
+      # has HOST pkgconfig dirs; the BUILD wayland-scanner .pc is in
+      # ${wayland-scanner.dev}/lib/pkgconfig (accessible here because the Nix
+      # interpolation adds wayland-scanner.dev to the build closure).
+      # Fix: inject the BUILD .pc dir into the HOST wrapper's salt variable so
+      # pkg_check_modules(WAYLAND_SCANNER wayland-scanner) succeeds.  cross-debug-2/16.
+      host_pc_bin="$(command -v x86_64-unknown-linux-gnu-pkg-config 2>/dev/null || true)"
+      if [ -n "$host_pc_bin" ]; then
+        pc_salt_var="$(grep -oE 'PKG_CONFIG_PATH_[A-Za-z0-9_]+' "$host_pc_bin" 2>/dev/null | head -1 || true)"
+        if [ -n "$pc_salt_var" ]; then
+          eval "export $pc_salt_var=\"${wayland-scanner.dev}/lib/pkgconfig:\$$pc_salt_var\""
         fi
       fi
     '';
