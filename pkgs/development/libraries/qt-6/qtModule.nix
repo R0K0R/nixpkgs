@@ -62,6 +62,11 @@ stdenv.mkDerivation (
     # effect in practice, but is kept harmlessly for documentation purposes.
     ++ lib.optionals (isCrossOrPseudo) [
       "-DCMAKE_INSTALL_LIBDIR=${placeholder "dev"}/lib"
+      # Qt's cmake build system (QtBuildHelpers.cmake:qt_internal_check_host_path_set_for_cross_compiling)
+      # requires QT_HOST_PATH when CMAKE_CROSSCOMPILING=TRUE.  In pseudo-cross,
+      # cmake sets CMAKE_CROSSCOMPILING=TRUE because the toolchain targets a different
+      # gcc.arch, so QT_HOST_PATH must point to the BUILD-platform qtbase prefix.
+      "-DQT_HOST_PATH=${pkgsBuildBuild.qt6.qtbase}"
       # Qt6CoreConfig.cmake declares a tool_dep on Qt6CoreTools (rcc, moc, uic).
       # Without this, cmake resolves Qt6::rcc to the HOST platform rcc binary,
       # which crashes on the build machine when HOST uses an ISA extension (e.g.
