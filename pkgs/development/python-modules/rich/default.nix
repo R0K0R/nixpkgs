@@ -37,6 +37,8 @@ buildPythonPackage rec {
     hash = "sha256-6udVO7N17ineQozlCG/tI9jJob811gqb4GtY50JZFb0=";
   };
 
+  patches = [ ./fix-brokenpipeerror-py313.patch ];
+
   build-system = [ poetry-core ];
 
   dependencies = [
