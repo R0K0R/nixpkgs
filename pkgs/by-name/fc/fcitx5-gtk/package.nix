@@ -46,7 +46,10 @@ stdenv.mkDerivation rec {
     "-DGOBJECT_INTROSPECTION_GIRDIR=share/gir-1.0"
     "-DGOBJECT_INTROSPECTION_TYPELIBDIR=lib/girepository-1.0"
   ]
-  ++ lib.optional (!withGTK2) "-DENABLE_GTK2_IM_MODULE=off";
+  ++ lib.optional (!withGTK2) "-DENABLE_GTK2_IM_MODULE=off"
+  # GIR scanner can't introspect HOST libraries in cross builds; cmake would
+  # install FcitxG-1.0.gir into gobject-introspection's read-only store path.
+  ++ lib.optional (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) "-DENABLE_GIR=OFF";
 
   buildInputs = [
     glib
