@@ -6,6 +6,7 @@
   pkg-config,
   buildPackages,
   cmake,
+  ninja,
   kdePackages,
   wayland-scanner,
   cairo,
@@ -61,6 +62,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     cmake
+    ninja
     kdePackages.extra-cmake-modules
     pkg-config
     wayland-scanner
@@ -99,6 +101,15 @@ stdenv.mkDerivation rec {
   cmakeFlags = lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
     (lib.cmakeFeature "CMAKE_CROSSCOMPILING_EMULATOR" (stdenv.hostPlatform.emulator buildPackages))
   ];
+
+  # In pseudo-cross cmake probes the cross compiler and re-emits its implicit
+  # include dirs as explicit -isystem flags, placing glibc-dev/include before
+  # the C++ stdlib headers.  This breaks #include_next <stdlib.h> inside
+  # GCC's <cstdlib>.  Strip the glibc -isystem from all generated .ninja files.
+  postConfigure = lib.optionalString (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    find . -name '*.ninja' | xargs -r sed -i \
+      's| -isystem ${stdenv.cc.libc.dev}/include||g'
+  '';
 
   strictDeps = true;
 
