@@ -21,6 +21,10 @@ stdenv.mkDerivation (finalAttrs: {
     python3
   ];
 
+  # gn build passes -Wno-format; nixpkgs hardening adds -Wformat-security which
+  # requires -Wformat to be active — same issue as qtwebengine itself.
+  hardeningDisable = [ "format" ];
+
   dontConfigure = true;
 
   buildPhase = ''
