@@ -169,6 +169,21 @@ cmakeConfigurePhase() {
         echo "cmake: enabled parallel installing"
     fi
 
+    # F16: Strip the redundant glibc -isystem injected by cmake's cross-compiler
+    # probe.  cmake runs `CXX -v -E /dev/null`, extracts implicit include dirs,
+    # and re-emits them as explicit -isystem flags in generated build files.  The
+    # glibc-dev include lands before the C++ stdlib headers, breaking
+    # #include_next <stdlib.h> inside GCC's <cstdlib> (and similarly for other
+    # C wrappers in C++ stdlib headers).  The nix cross-compiler wrapper already
+    # injects the correct include order via NIX_CFLAGS_COMPILE; the cmake-emitted
+    # -isystem is redundant and harmful.  Covers both generators: Ninja (*.ninja)
+    # and Unix Makefiles (CMakeFiles/**/flags.make).  Pattern cross-debug/32+41.
+    if [[ "${NIX_IS_PSEUDO_CROSS-}" == "1" ]]; then
+        find . \( -name '*.ninja' -o -name 'flags.make' \) \
+            | xargs -r sed -Ei \
+                's| -isystem /nix/store/[a-z0-9]{32}-glibc-[^ ]*/include||g'
+    fi
+
     runHook postConfigure
 }
 
