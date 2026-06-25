@@ -290,6 +290,20 @@ qtModule {
 
   requiredSystemFeatures = [ "big-parallel" ];
 
+  postConfigure =
+    # cmake's create_pkg_config_host_wrapper() generates pkg-config-host_wrapper.sh
+    # which unsets PKG_CONFIG_PATH before calling the nix HOST pkg-config wrapper.
+    # The nix wrapper's mangleVarListGeneric reads plain PKG_CONFIG_PATH to populate
+    # PKG_CONFIG_PATH_x86_64_unknown_linux_gnu — finding it unset leaves that var
+    # empty → inner exec pkg-config runs with no paths → icu-i18n not found.
+    # Remove only PKG_CONFIG_PATH (keep the LIBDIR/SYSROOT_DIR unsets) so that
+    # HOST .pc paths set by the F4 setup-hook relax survive into the GN pkg_config() call.
+    lib.optionalString (!(stdenv.buildPlatform.canExecute stdenv.hostPlatform)) ''
+      find "$PWD" -name "pkg-config-host_wrapper.sh" | while IFS= read -r f; do
+        sed -i '/^unset PKG_CONFIG_PATH$/d' "$f"
+      done
+    '';
+
   preConfigure =
     # FindPkgConfigHost.cmake searches for plain "pkg-config" with
     # NO_SYSTEM_ENVIRONMENT_PATH (skips PATH entirely).  It does check
