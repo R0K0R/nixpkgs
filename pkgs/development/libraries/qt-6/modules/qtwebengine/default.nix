@@ -75,23 +75,39 @@
 
 qtModule {
   pname = "qtwebengine";
-  nativeBuildInputs = [
-    bison
-    coreutils
-    flex
-    gperf
-    ninja
-    pkg-config
-    (python3.withPackages (ps: with ps; [ html5lib ]))
-    which
-    gn
-    nodejs
-  ]
-  ++ lib.optionals stdenv.hostPlatform.isDarwin [
-    bootstrap_cmds
-    cctools
-    xcbuild
-  ];
+  nativeBuildInputs =
+    [
+      bison
+      coreutils
+      flex
+      gperf
+      ninja
+      pkg-config
+      (python3.withPackages (ps: with ps; [ html5lib ]))
+      which
+      nodejs
+    ]
+    # In cross builds, FindGn.cmake requires exactly version "6.11.0" (matching
+    # QT_REPO_MODULE_VERSION).  The stock nixpkgs gn reports "2341" (upstream GN
+    # revision) → version mismatch → Gn_FOUND=FALSE → FATAL_ERROR.  Use the
+    # Qt-patched gn (built by qt6Gn from src/3rdparty/gn/) which reports
+    # "6.11.0.qtwebengine.qt.io" and satisfies the EXACT version requirement.
+    # In native builds, gn version still mismatches but the FATAL_ERROR is not
+    # reached (CMAKE_CROSSCOMPILING=FALSE) — qtwebengine builds gn from source
+    # via ExternalProject_Add.  Keep native behaviour: use system gn in PATH so
+    # find_program finds it (Gn_FOUND=FALSE → falls through to ExternalProject_Add).
+    ++ (
+      if !stdenv.buildPlatform.canExecute stdenv.hostPlatform then
+        [ (buildPackages.qt6.qt6Gn) ]
+      else
+        [ gn ]
+    )
+
+    ++ lib.optionals stdenv.hostPlatform.isDarwin [
+      bootstrap_cmds
+      cctools
+      xcbuild
+    ];
   doCheck = true;
   outputs = [
     "out"
@@ -189,7 +205,7 @@ qtModule {
     "-DQT_FEATURE_webengine_proprietary_codecs=ON"
   ]
   ++ lib.optionals stdenv.hostPlatform.isDarwin [
-    "-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0" # Per Qt 6’s deployment target (why doesn’t the hook work?)
+    "-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0" # Per Qt 6's deployment target (why doesn't the hook work?)
   ];
 
   propagatedBuildInputs = [
@@ -274,9 +290,20 @@ qtModule {
 
   requiredSystemFeatures = [ "big-parallel" ];
 
-  preConfigure = ''
-    export NINJAFLAGS="-j$NIX_BUILD_CORES"
-  '';
+  preConfigure =
+    # FindPkgConfigHost.cmake searches for plain "pkg-config" with
+    # NO_SYSTEM_ENVIRONMENT_PATH (skips PATH entirely).  It does check
+    # $ENV{PKG_CONFIG_HOST} first, so set that to the prefixed HOST wrapper
+    # which is in PATH when NIX_IS_PSEUDO_CROSS=1 (F4 hook).
+    lib.optionalString (!(stdenv.buildPlatform.canExecute stdenv.hostPlatform)) ''
+      _hostPkgConfig=$(command -v "${stdenv.hostPlatform.config}-pkg-config" 2>/dev/null || true)
+      if [ -n "$_hostPkgConfig" ]; then
+        export PKG_CONFIG_HOST="$_hostPkgConfig"
+      fi
+    ''
+    + ''
+      export NINJAFLAGS="-j$NIX_BUILD_CORES"
+    '';
 
   # Debug info is too big to link with LTO.
   separateDebugInfo = false;
