@@ -80,10 +80,15 @@ stdenv.mkDerivation (finalAttrs: {
   # and PKG_CONFIG_PATH (populated with HOST .pc dirs by F4's strictDeps relax)
   # is actually searched.
   preBuild = lib.optionalString stdenv.isPseudoCross ''
+    # link_pkgconfig.prf calls bare `pkg-config`, but pseudo-cross PATH only
+    # has `${stdenv.hostPlatform.config}-pkg-config` (the HOST wrapper).
+    # Resolve it at build time via command -v and alias it as plain `pkg-config`.
     _moonlight_tmpbin=$(mktemp -d)
-    ln -s "${pkg-config}/bin/${stdenv.hostPlatform.config}-pkg-config" \
-      "$_moonlight_tmpbin/pkg-config"
-    export PATH="$_moonlight_tmpbin:$PATH"
+    _hostPkgConfig=$(command -v "${stdenv.hostPlatform.config}-pkg-config" 2>/dev/null || true)
+    if [ -n "$_hostPkgConfig" ]; then
+      ln -s "$_hostPkgConfig" "$_moonlight_tmpbin/pkg-config"
+      export PATH="$_moonlight_tmpbin:$PATH"
+    fi
   '';
 
   postInstall = lib.optionalString stdenv.hostPlatform.isDarwin ''
