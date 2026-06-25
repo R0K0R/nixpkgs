@@ -102,15 +102,6 @@ stdenv.mkDerivation rec {
     (lib.cmakeFeature "CMAKE_CROSSCOMPILING_EMULATOR" (stdenv.hostPlatform.emulator buildPackages))
   ];
 
-  # In pseudo-cross cmake probes the cross compiler and re-emits its implicit
-  # include dirs as explicit -isystem flags, placing glibc-dev/include before
-  # the C++ stdlib headers.  This breaks #include_next <stdlib.h> inside
-  # GCC's <cstdlib>.  Strip the glibc -isystem from all generated .ninja files.
-  postConfigure = lib.optionalString (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
-    find . -name '*.ninja' | xargs -r sed -i \
-      's| -isystem ${stdenv.cc.libc.dev}/include||g'
-  '';
-
   strictDeps = true;
 
   passthru = {
