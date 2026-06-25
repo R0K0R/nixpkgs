@@ -295,10 +295,18 @@ qtModule {
     # NO_SYSTEM_ENVIRONMENT_PATH (skips PATH entirely).  It does check
     # $ENV{PKG_CONFIG_HOST} first, so set that to the prefixed HOST wrapper
     # which is in PATH when NIX_IS_PSEUDO_CROSS=1 (F4 hook).
+    #
+    # Also set PKG_CONFIG so cmake's find_package(PkgConfig) uses the HOST
+    # pkg-config.  QtToolchainHelpers.cmake's append_pkg_config_setup() sets
+    # GN arg pkg_config="${PKG_CONFIG_EXECUTABLE}".  Without this, cmake finds
+    # the BUILD-side pkg-config which has no HOST library paths; GN's
+    # pkg_config("system_icui18n") then fails with "Could not run pkg-config"
+    # because pkg-config returns exit 1 for unknown packages.
     lib.optionalString (!(stdenv.buildPlatform.canExecute stdenv.hostPlatform)) ''
       _hostPkgConfig=$(command -v "${stdenv.hostPlatform.config}-pkg-config" 2>/dev/null || true)
       if [ -n "$_hostPkgConfig" ]; then
         export PKG_CONFIG_HOST="$_hostPkgConfig"
+        export PKG_CONFIG="$_hostPkgConfig"
       fi
     ''
     + ''
