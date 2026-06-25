@@ -72,6 +72,20 @@ stdenv.mkDerivation (finalAttrs: {
 
   qmakeFlags = [ "CONFIG+=disable-prebuilts" ];
 
+  # During buildPhase, qmake re-runs for sub-projects that lack a Makefile
+  # (moonlight-common-c). Qt's link_pkgconfig.prf calls bare `pkg-config`,
+  # but in pseudo-cross the only pkg-config binary in PATH is
+  # `${hostPlatform.config}-pkg-config` (the HOST wrapper). Provide a plain
+  # `pkg-config` symlink pointing at the HOST wrapper so that qmake finds it
+  # and PKG_CONFIG_PATH (populated with HOST .pc dirs by F4's strictDeps relax)
+  # is actually searched.
+  preBuild = lib.optionalString stdenv.isPseudoCross ''
+    _moonlight_tmpbin=$(mktemp -d)
+    ln -s "${pkg-config}/bin/${stdenv.hostPlatform.config}-pkg-config" \
+      "$_moonlight_tmpbin/pkg-config"
+    export PATH="$_moonlight_tmpbin:$PATH"
+  '';
+
   postInstall = lib.optionalString stdenv.hostPlatform.isDarwin ''
     mkdir $out/Applications $out/bin
     mv app/Moonlight.app $out/Applications
