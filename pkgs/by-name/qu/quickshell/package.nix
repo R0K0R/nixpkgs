@@ -70,6 +70,11 @@ stdenv.mkDerivation (finalAttrs: {
     (lib.cmakeFeature "DISTRIBUTOR" "Nixpkgs")
     (lib.cmakeFeature "INSTALL_QML_PREFIX" qt6.qtbase.qtQmlPrefix)
     (lib.cmakeFeature "GIT_REVISION" "tag-v${finalAttrs.version}")
+    # In cross builds CMAKE_CROSSCOMPILING=TRUE prevents cmake from executing
+    # the try_run() probe in src/crash/CMakeLists.txt. cpptrace is built with
+    # CPPTRACE_UNWIND_WITH_LIBUNWIND=true so signal-safe unwind works; skip
+    # the runtime probe and rely on the package being correct.
+    (lib.cmakeBool "DO_NOT_CHECK_CPPTRACE_USABILITY" (!stdenv.buildPlatform.canExecute stdenv.hostPlatform))
   ];
 
   cmakeBuildType = "RelWithDebInfo";
