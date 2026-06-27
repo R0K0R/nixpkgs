@@ -188,19 +188,18 @@ let
         "-DQt6ScxmlTools_DIR=${pkgsBuildBuild.qt6.qtscxml}/lib/cmake/Qt6ScxmlTools"
         "-DQt6RemoteObjectsTools_DIR=${pkgsBuildBuild.qt6.qtremoteobjects}/lib/cmake/Qt6RemoteObjectsTools"
         "-DQt6Quick3DTools_DIR=${pkgsBuildBuild.qt6.qtquick3d}/lib/cmake/Qt6Quick3DTools"
-        # KF6DocToolsConfig.cmake only redirects KF6::meinproc6 to a BUILD-platform
-        # binary when CMAKE_CROSSCOMPILING=TRUE AND MEINPROC6_EXECUTABLE is set.
-        # In pseudo-cross cmake sets CMAKE_CROSSCOMPILING=FALSE (same OS/arch), so
-        # the conditional never fires and the HOST meinproc6 (meteorlake binary) is
-        # used as a doc-generation tool on the AMD builder → crash.  Force
-        # CMAKE_CROSSCOMPILING=TRUE here; the F11 preload (cmake/setup-hook.sh)
-        # forwards it via CMAKE_PROJECT_INCLUDE which fires after project() but
-        # before any find_package(KF6DocTools), so the override lands in time.
-        # meinproc6 and checkXML6 are public tools unconditionally installed by
-        # kdoctools (no INSTALL_INTERNAL_TOOLS needed).  Pattern B / cross-debug/65.
+        # KF6DocToolsConfig.cmake checks `CMAKE_CROSSCOMPILING AND KF6_HOST_TOOLING`
+        # and, when true, does find_file(... KF6DocTools/KF6DocToolsToolsTargets.cmake
+        # PATHS ${KF6_HOST_TOOLING}) to load BUILD-platform tool targets.  Without
+        # these two vars the HOST meinproc6 (meteorlake binary) runs on the AMD
+        # builder → SIGILL.  CMAKE_CROSSCOMPILING is injected via the F11 preload
+        # (cmake/setup-hook.sh CMAKE_PROJECT_INCLUDE) which fires after project()
+        # but before find_package(KF6DocTools), so the override is in place in time.
+        # KF6_HOST_TOOLING points at the BUILD kdoctools dev/lib/cmake dir; cmake's
+        # find_file falls back to CMAKE_CURRENT_LIST_DIR (HOST) when a given package
+        # isn't covered, so this is safe for all KDE builds.  Pattern B / cross-debug/65.
         "-DCMAKE_CROSSCOMPILING=TRUE"
-        "-DMEINPROC6_EXECUTABLE=${pkgsBuildBuild.kdePackages.kdoctools}/bin/meinproc6"
-        "-DCHECKXML6_EXECUTABLE=${pkgsBuildBuild.kdePackages.kdoctools}/bin/checkXML6"
+        "-DKF6_HOST_TOOLING=${pkgsBuildBuild.kdePackages.kdoctools.dev}/lib/cmake"
       ]
       ++ extraCmakeFlags;
 
