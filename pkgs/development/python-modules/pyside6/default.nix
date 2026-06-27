@@ -87,9 +87,8 @@ stdenv.mkDerivation (finalAttrs: {
     #   1. PySide6/QtWebEngineCore/CMakeLists.txt  — explicit source list
     #   2. PySide6/QtWebEngineCore/typesystem_webenginecore.xml — shiboken6 typesystem
     # Patch both so cmake and shiboken6 agree on what files to generate.
-    sed -i '/QWebEngineExtension/d' \
-      PySide6/QtWebEngineCore/CMakeLists.txt \
-      PySide6/QtWebEngineCore/typesystem_webenginecore.xml
+    sed -i '/QWebEngineExtension/d' PySide6/QtWebEngineCore/typesystem_webenginecore.xml
+    sed -i '/qwebengineextension/d' PySide6/QtWebEngineCore/CMakeLists.txt
   ''
   + lib.optionalString stdenv.hostPlatform.isDarwin ''
     substituteInPlace cmake/PySideHelpers.cmake \
