@@ -89,6 +89,15 @@ stdenv.mkDerivation (finalAttrs: {
     # Patch both so cmake and shiboken6 agree on what files to generate.
     sed -i '/QWebEngineExtension/d' PySide6/QtWebEngineCore/typesystem_webenginecore.xml
     sed -i '/qwebengineextension/d' PySide6/QtWebEngineCore/CMakeLists.txt
+
+    # In cross builds the HOST qtbase has no Qt6CoreTools (BUILD-only tools).
+    # Qt6CoreConfig.cmake requires Qt6CoreTools but the mkspecs cmake probe
+    # only reads feature flags — it doesn't need the tools themselves.
+    # QT_ALLOW_MISSING_TOOLS_PACKAGES suppresses the hard failure.
+    substituteInPlace build_scripts/qtinfo.py \
+      --replace-fail \
+        'cmake_cache_args.extend(platform_cmake_options(as_tuple_list=True))' \
+        'cmake_cache_args.extend(platform_cmake_options(as_tuple_list=True)); cmake_cache_args.append(("QT_ALLOW_MISSING_TOOLS_PACKAGES", "TRUE"))'
   ''
   + lib.optionalString stdenv.hostPlatform.isDarwin ''
     substituteInPlace cmake/PySideHelpers.cmake \
