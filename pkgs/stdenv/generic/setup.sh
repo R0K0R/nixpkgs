@@ -847,9 +847,7 @@ activatePackage() {
     # the transition, we do include everything in that case.
     #
     # TODO(@Ericson2314): Don't special-case native compilation
-    # F4b: In pseudo-cross builds HOST binaries execute on BUILD (same ISA),
-    # so HOST bin/ dirs belong in PATH just like BUILD ones.
-    if [[ -z "${strictDeps-}" || "$hostOffset" -le -1 || "${NIX_IS_PSEUDO_CROSS-}" == "1" ]]; then
+    if [[ -z "${strictDeps-}" || "$hostOffset" -le -1 ]]; then
         addToSearchPath _PATH "$pkg/bin"
     fi
 
