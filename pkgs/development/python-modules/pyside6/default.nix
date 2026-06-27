@@ -81,12 +81,14 @@ stdenv.mkDerivation (finalAttrs: {
         'set (found_basepath 0)'
 
     # QWebEngineExtensionInfo/Manager are guarded by QT_CONFIG(webengine_extensions)
-    # which is disabled in our qtwebengine build (-1).  Shiboken6 therefore finds no
-    # class definition and skips generating the wrapper .cpp files, but cmake still
-    # adds compile steps for them based on the typesystem — causing "No such file or
-    # directory" at build time.  Remove both types from the typesystem to keep cmake
-    # and shiboken6 in sync.
+    # which is disabled in our qtwebengine build (-1).  Shiboken6 finds no class
+    # definition and skips generating the wrapper .cpp files, but cmake still tries
+    # to compile them from TWO hardcoded places:
+    #   1. PySide6/QtWebEngineCore/CMakeLists.txt  — explicit source list
+    #   2. PySide6/QtWebEngineCore/typesystem_webenginecore.xml — shiboken6 typesystem
+    # Patch both so cmake and shiboken6 agree on what files to generate.
     sed -i '/QWebEngineExtension/d' \
+      PySide6/QtWebEngineCore/CMakeLists.txt \
       PySide6/QtWebEngineCore/typesystem_webenginecore.xml
   ''
   + lib.optionalString stdenv.hostPlatform.isDarwin ''
