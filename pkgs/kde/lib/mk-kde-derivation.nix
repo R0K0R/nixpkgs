@@ -188,6 +188,19 @@ let
         "-DQt6ScxmlTools_DIR=${pkgsBuildBuild.qt6.qtscxml}/lib/cmake/Qt6ScxmlTools"
         "-DQt6RemoteObjectsTools_DIR=${pkgsBuildBuild.qt6.qtremoteobjects}/lib/cmake/Qt6RemoteObjectsTools"
         "-DQt6Quick3DTools_DIR=${pkgsBuildBuild.qt6.qtquick3d}/lib/cmake/Qt6Quick3DTools"
+        # KF6DocToolsConfig.cmake only redirects KF6::meinproc6 to a BUILD-platform
+        # binary when CMAKE_CROSSCOMPILING=TRUE AND MEINPROC6_EXECUTABLE is set.
+        # In pseudo-cross cmake sets CMAKE_CROSSCOMPILING=FALSE (same OS/arch), so
+        # the conditional never fires and the HOST meinproc6 (meteorlake binary) is
+        # used as a doc-generation tool on the AMD builder → crash.  Force
+        # CMAKE_CROSSCOMPILING=TRUE here; the F11 preload (cmake/setup-hook.sh)
+        # forwards it via CMAKE_PROJECT_INCLUDE which fires after project() but
+        # before any find_package(KF6DocTools), so the override lands in time.
+        # meinproc6 and checkXML6 are public tools unconditionally installed by
+        # kdoctools (no INSTALL_INTERNAL_TOOLS needed).  Pattern B / cross-debug/65.
+        "-DCMAKE_CROSSCOMPILING=TRUE"
+        "-DMEINPROC6_EXECUTABLE=${pkgsBuildBuild.kdePackages.kdoctools}/bin/meinproc6"
+        "-DCHECKXML6_EXECUTABLE=${pkgsBuildBuild.kdePackages.kdoctools}/bin/checkXML6"
       ]
       ++ extraCmakeFlags;
 
