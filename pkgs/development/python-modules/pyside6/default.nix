@@ -134,7 +134,8 @@ stdenv.mkDerivation (finalAttrs: {
   postInstall = ''
     cd ../../..
     chmod +w .
-    ${python.pythonOnBuildForHost.interpreter} setup.py egg_info --build-type=pyside6
+    ${python.pythonOnBuildForHost.interpreter} setup.py egg_info --build-type=pyside6 \
+      --qtpaths ${python.pkgs.qt6.qtbase}/bin/qtpaths6
     cp -r PySide6.egg-info $out/${python.sitePackages}/
 
     mkdir -p "$devtools"
