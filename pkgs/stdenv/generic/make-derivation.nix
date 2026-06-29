@@ -550,11 +550,23 @@ let
         outputs = outputs';
 
         buildBuildOutputs =
-          if depsBuildBuild == [ ] then
+          let
+            # F2: In pseudo-cross, the HOST cc-wrapper provides only prefixed
+            # names (x86_64-unknown-linux-gnu-gcc); build systems calling gcc/g++/cc
+            # by plain name fail with "command not found" (Pattern A1/A2/G1).
+            # Inject stdenv.cc here so __spliced.buildBuild (the BUILD-platform
+            # cc-wrapper, which installs plain names) lands in depsBuildBuild and
+            # therefore in PATH, without each package declaring it explicitly.
+            # The BUILD wrapper is safe to execute on the build machine (no -march
+            # mismatch).  Extension note: drop the isPseudoCross guard to cover all
+            # cross builds (safe when hostPlatform.config == buildPlatform.config).
+            implicitCC = optionals ((stdenv.isPseudoCross or false) && stdenvHasCC) [ stdenv.cc ];
+          in
+          if implicitCC == [ ] && depsBuildBuild == [ ] then
             [ ]
           else
             map (drv: getDev drv.__spliced.buildBuild or drv) (
-              checkDependencyList "depsBuildBuild" depsBuildBuild
+              checkDependencyList "depsBuildBuild" (implicitCC ++ depsBuildBuild)
             );
         buildHostOutputs =
           if nativeBuildInputs' == [ ] then
