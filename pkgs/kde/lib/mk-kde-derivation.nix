@@ -95,6 +95,17 @@ let
     };
     meta.license = lib.licenses.mit;
   } ./qmllint-hook.sh;
+
+  # Unified BUILD-platform KDE cmake tool directory.  cmake's find_file()
+  # searches KF6_HOST_TOOLING for <Pkg>/<Pkg>ToolsTargets.cmake (one subdir
+  # per KDE framework that ships cross-build tools).  Each symlink points at
+  # the BUILD-platform cmake install, whose targets already reference BUILD
+  # binaries — no path patching needed.  Pattern B / cross-debug/65 + 66.
+  kf6HostTooling = pkgsBuildBuild.runCommand "kf6-host-tooling" { } ''
+    mkdir -p "$out"
+    ln -s "${pkgsBuildBuild.kdePackages.kdoctools.dev}/lib/cmake/KF6DocTools" "$out/KF6DocTools"
+    ln -s "${pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake/KF6Config"    "$out/KF6Config"
+  '';
 in
 {
   pname,
@@ -188,18 +199,15 @@ let
         "-DQt6ScxmlTools_DIR=${pkgsBuildBuild.qt6.qtscxml}/lib/cmake/Qt6ScxmlTools"
         "-DQt6RemoteObjectsTools_DIR=${pkgsBuildBuild.qt6.qtremoteobjects}/lib/cmake/Qt6RemoteObjectsTools"
         "-DQt6Quick3DTools_DIR=${pkgsBuildBuild.qt6.qtquick3d}/lib/cmake/Qt6Quick3DTools"
-        # KF6DocToolsConfig.cmake checks `CMAKE_CROSSCOMPILING AND KF6_HOST_TOOLING`
-        # and, when true, does find_file(... KF6DocTools/KF6DocToolsToolsTargets.cmake
-        # PATHS ${KF6_HOST_TOOLING}) to load BUILD-platform tool targets.  Without
-        # these two vars the HOST meinproc6 (meteorlake binary) runs on the AMD
-        # builder → SIGILL.  CMAKE_CROSSCOMPILING is injected via the F11 preload
-        # (cmake/setup-hook.sh CMAKE_PROJECT_INCLUDE) which fires after project()
-        # but before find_package(KF6DocTools), so the override is in place in time.
-        # KF6_HOST_TOOLING points at the BUILD kdoctools dev/lib/cmake dir; cmake's
-        # find_file falls back to CMAKE_CURRENT_LIST_DIR (HOST) when a given package
-        # isn't covered, so this is safe for all KDE builds.  Pattern B / cross-debug/65.
+        # KDE framework cmake configs check `CMAKE_CROSSCOMPILING AND KF6_HOST_TOOLING`
+        # and, when true, do find_file(<Pkg>/<Pkg>ToolsTargets.cmake PATHS
+        # ${KF6_HOST_TOOLING}) to load BUILD-platform tool targets instead of
+        # running HOST (meteorlake) binaries on the AMD builder → SIGILL.
+        # kf6HostTooling aggregates all BUILD-platform KDE cmake tool subdirs in one
+        # tree (KF6DocTools/, KF6Config/, …) so every framework that uses this pattern
+        # is satisfied by a single KF6_HOST_TOOLING value.  Pattern B / cross-debug/65+66.
         "-DCMAKE_CROSSCOMPILING=TRUE"
-        "-DKF6_HOST_TOOLING=${pkgsBuildBuild.kdePackages.kdoctools.dev}/lib/cmake"
+        "-DKF6_HOST_TOOLING=${kf6HostTooling}"
       ]
       ++ extraCmakeFlags;
 
