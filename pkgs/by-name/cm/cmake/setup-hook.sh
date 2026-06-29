@@ -129,7 +129,8 @@ cmakeConfigurePhase() {
                     CMAKE_FIND_USE_PACKAGE_REGISTRY|\
                     CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY|\
                     CMAKE_EXPORT_NO_PACKAGE_REGISTRY|\
-                    CMAKE_BUILD_TYPE|BUILD_TESTING)
+                    CMAKE_BUILD_TYPE|BUILD_TESTING|\
+                    CMAKE_CROSSCOMPILING)
                         : ;;
                     *)
                         printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
