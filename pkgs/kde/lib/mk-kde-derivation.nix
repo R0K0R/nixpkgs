@@ -14,7 +14,7 @@ self:
 let
   # Reliable cross-or-pseudo-cross detection (see cross-debug/31 & qtModule.nix).
   isCrossOrPseudo =
-    (stdenv.isPseudoCross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+    (stdenv.isIntraISACross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 
   dependencies = (lib.importJSON ../generated/dependencies.json).dependencies;
   projectInfo = lib.importJSON ../generated/projects.json;

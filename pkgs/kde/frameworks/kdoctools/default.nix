@@ -11,7 +11,7 @@
 }:
 let
   isCrossOrPseudo =
-    (stdenv.isPseudoCross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+    (stdenv.isIntraISACross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 
   # docbookl10nhelper is internal (INSTALL_INTERNAL_TOOLS=ON needed) but
   # meinproc6 and checkXML6 are unconditionally installed.

@@ -147,27 +147,25 @@ fi
 # collapsing ISA namespaces and causing link-time symbol collisions.
 # When the user supplies -march/-mcpu/-mtune in params, strip the corresponding
 # nix-injected flag from NIX_CFLAGS_COMPILE so the user's value wins.
-if [[ "${NIX_IS_PSEUDO_CROSS-}" == "1" ]]; then
-    _f6_march=0 _f6_mcpu=0 _f6_mtune=0
-    for _f6_p in ${params+"${params[@]}"}; do
-        case "$_f6_p" in
-            -march=*) _f6_march=1 ;;
-            -mcpu=*)  _f6_mcpu=1 ;;
-            -mtune=*) _f6_mtune=1 ;;
+_f6_march=0 _f6_mcpu=0 _f6_mtune=0
+for _f6_p in ${params+"${params[@]}"}; do
+    case "$_f6_p" in
+        -march=*) _f6_march=1 ;;
+        -mcpu=*)  _f6_mcpu=1 ;;
+        -mtune=*) _f6_mtune=1 ;;
+    esac
+done
+if [[ $_f6_march == 1 || $_f6_mcpu == 1 || $_f6_mtune == 1 ]]; then
+    _f6_filtered=()
+    for _f6_f in $NIX_CFLAGS_COMPILE_@suffixSalt@; do
+        case "$_f6_f" in
+            -march=*) [[ $_f6_march == 0 ]] && _f6_filtered+=("$_f6_f") ;;
+            -mcpu=*)  [[ $_f6_mcpu  == 0 ]] && _f6_filtered+=("$_f6_f") ;;
+            -mtune=*) [[ $_f6_mtune == 0 ]] && _f6_filtered+=("$_f6_f") ;;
+            *) _f6_filtered+=("$_f6_f") ;;
         esac
     done
-    if [[ $_f6_march == 1 || $_f6_mcpu == 1 || $_f6_mtune == 1 ]]; then
-        _f6_filtered=()
-        for _f6_f in $NIX_CFLAGS_COMPILE_@suffixSalt@; do
-            case "$_f6_f" in
-                -march=*) [[ $_f6_march == 0 ]] && _f6_filtered+=("$_f6_f") ;;
-                -mcpu=*)  [[ $_f6_mcpu  == 0 ]] && _f6_filtered+=("$_f6_f") ;;
-                -mtune=*) [[ $_f6_mtune == 0 ]] && _f6_filtered+=("$_f6_f") ;;
-                *) _f6_filtered+=("$_f6_f") ;;
-            esac
-        done
-        NIX_CFLAGS_COMPILE_@suffixSalt@="${_f6_filtered[*]}"
-    fi
+    NIX_CFLAGS_COMPILE_@suffixSalt@="${_f6_filtered[*]}"
 fi
 
 # Some build systems such as Bazel and SwiftPM use `clang` instead of `clang++`,

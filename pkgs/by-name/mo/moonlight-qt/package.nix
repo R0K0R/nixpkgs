@@ -79,7 +79,7 @@ stdenv.mkDerivation (finalAttrs: {
   # `pkg-config` symlink pointing at the HOST wrapper so that qmake finds it
   # and PKG_CONFIG_PATH (populated with HOST .pc dirs by F4's strictDeps relax)
   # is actually searched.
-  preBuild = lib.optionalString stdenv.isPseudoCross ''
+  preBuild = lib.optionalString stdenv.isIntraISACross ''
     # link_pkgconfig.prf calls bare `pkg-config`, but pseudo-cross PATH only
     # has `${stdenv.hostPlatform.config}-pkg-config` (the HOST wrapper).
     # Resolve it at build time via command -v and alias it as plain `pkg-config`.

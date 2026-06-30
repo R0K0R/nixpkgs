@@ -18,7 +18,7 @@
   # and not in pseudo-cross (HOST ISA may exceed BUILD ISA, causing SIGILL
   # when executing compiled extension modules on the build machine).
   buildTests ? stdenv.hostPlatform.parsed.cpu.bits == stdenv.buildPlatform.parsed.cpu.bits
-    && !stdenv.isPseudoCross,
+    && !stdenv.isIntraISACross,
 }:
 let
   setupHook = makeSetupHook {

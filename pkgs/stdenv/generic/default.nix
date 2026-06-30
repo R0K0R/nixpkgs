@@ -200,8 +200,11 @@ let
       # real cross (different ISA, different calling conventions) don't apply.
       # Relaxing certain cross-specific defences is safe here.
       #
-      # Extension note: drop the .config equality guard to apply to all cross builds.
-      isPseudoCross =
+      # "Intra-ISA cross": same ISA (same config string), different microarch
+      # (gcc.arch). Tools that use config-string comparison to detect native/cross
+      # (collect2, autoconf, GCC configure) see the same string and behave as if
+      # native, requiring plain-name tool aliases in the HOST wrapper.
+      isIntraISACross =
         hostPlatform != buildPlatform
         && hostPlatform.config == buildPlatform.config;
 

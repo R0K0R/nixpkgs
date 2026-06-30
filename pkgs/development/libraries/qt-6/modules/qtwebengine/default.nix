@@ -308,7 +308,7 @@ qtModule {
     # FindPkgConfigHost.cmake searches for plain "pkg-config" with
     # NO_SYSTEM_ENVIRONMENT_PATH (skips PATH entirely).  It does check
     # $ENV{PKG_CONFIG_HOST} first, so set that to the prefixed HOST wrapper
-    # which is in PATH when NIX_IS_PSEUDO_CROSS=1 (F4 hook).
+    # which is in PATH when NIX_IS_INTRA_ISA_CROSS=1 (F4 hook).
     #
     # Also set PKG_CONFIG so cmake's find_package(PkgConfig) uses the HOST
     # pkg-config.  QtToolchainHelpers.cmake's append_pkg_config_setup() sets
