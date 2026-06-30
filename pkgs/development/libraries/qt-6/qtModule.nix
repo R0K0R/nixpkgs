@@ -17,13 +17,12 @@ let
   inherit (args) pname;
   version = args.version or srcs.${pname}.version;
   src = args.src or srcs.${pname}.src;
-  # isCrossOrPseudo is unreliable for pseudo-cross
-  # (Nix attrset comparison short-circuits on thunks; returns same hash as no
-  # condition — see cross-debug/31 iteration 2).  Use explicit booleans:
-  #   isPseudoCross — same system tuple, different gcc.arch (canExecute = true)
-  #   !canExecute   — real cross (aarch64 etc.; canExecute = false)
+  # isCrossOrPseudo: use explicit booleans (Nix attrset comparison can
+  # short-circuit on thunks — see cross-debug/31 iteration 2):
+  #   isIntraISACross — same config string, different gcc.arch
+  #   !canExecute     — real cross (aarch64 etc.; canExecute = false)
   isCrossOrPseudo =
-    (stdenv.isPseudoCross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+    (stdenv.isIntraISACross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 in
 stdenv.mkDerivation (
   args

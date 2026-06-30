@@ -11,7 +11,7 @@
 # (( "$hostOffset" < 0 )) evaluates false.  Allow HOST packages' pkgconfig dirs
 # to reach PKG_CONFIG_PATH so the HOST pkg-config wrapper's add-flags.sh can
 # copy them into PKG_CONFIG_PATH_<salt> at wrapper invocation time.
-[[ -z ${strictDeps-} ]] || (( "$hostOffset" < 0 )) || [[ "${NIX_IS_PSEUDO_CROSS-}" == "1" ]] || return 0
+[[ -z ${strictDeps-} ]] || (( "$hostOffset" < 0 )) || [[ "${NIX_IS_INTRA_ISA_CROSS-}" == "1" ]] || return 0
 
 pkgConfigWrapper_addPkgConfigPath () {
     # See ../setup-hooks/role.bash

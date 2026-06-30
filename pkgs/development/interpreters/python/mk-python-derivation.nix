@@ -407,7 +407,7 @@ lib.extendMkDerivation {
       # reference to pythonOnBuildForHost in the output is harmless; skip the check.
       disallowedReferences = optionals (
         python.stdenv.hostPlatform != python.stdenv.buildPlatform
-        && !(python.stdenv.isPseudoCross or false)
+        && !(python.stdenv.isIntraISACross or false)
       ) [
         python.pythonOnBuildForHost
       ];

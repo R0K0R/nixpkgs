@@ -1,10 +1,9 @@
 if [[ -n "${__nix_qtbase-}" ]]; then
     # Throw an error if a different version of Qt was already set up.
-    # In pseudo-cross builds BUILD and HOST share the same ISA, so a BUILD-
-    # platform qtbase (qtbase-5.15.18-dev) and a HOST-platform qtbase
-    # (qtbase-x86_64-unknown-linux-gnu-5.15.18-dev) coexist without harm.
-    # Skip the version-mismatch check entirely in that case.
-    if [[ -z "${NIX_IS_PSEUDO_CROSS-}" ]]; then
+    # In intra-ISA cross builds BUILD and HOST share the same config string
+    # (same ABI), so BUILD-platform and HOST-platform qtbase coexist without
+    # harm.  Skip the version-mismatch check entirely in that case.
+    if [[ -z "${NIX_IS_INTRA_ISA_CROSS-}" ]]; then
         # Compare by package name (strip store hash) rather than full path so
         # that genuine mismatches (5.14 vs 5.15) still fail.
         _qt_name_cur="@dev@"; _qt_name_cur="${_qt_name_cur##*/}"; _qt_name_cur="${_qt_name_cur#*-}"

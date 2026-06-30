@@ -85,6 +85,16 @@ stdenv.mkDerivation {
       echo $pkg-config > $out/nix-support/orig-pkg-config
 
       wrap ${wrapperBinName} ${./pkg-config-wrapper.sh} "${getBin pkg-config}/bin/${baseBinName}"
+
+      ${optionalString (targetPrefix != "" && targetPlatform.config == hostPlatform.config) ''
+        # F-gap2: Intra-ISA cross plain-name symlink.  Build systems (qmake
+        # sub-makes, autoconf, node-gyp) that use config-string comparison to
+        # detect native/cross call bare `pkg-config`, so provide a plain-name
+        # alias pointing at the HOST wrapper.  Same-ABI rationale as F2/F3.
+        if [ ! -e "$out/bin/${baseBinName}" ]; then
+          ln -s "${wrapperBinName}" "$out/bin/${baseBinName}"
+        fi
+      ''}
     ''
     # symlink in share for autoconf to find macros
 

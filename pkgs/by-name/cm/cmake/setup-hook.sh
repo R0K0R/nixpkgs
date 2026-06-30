@@ -179,7 +179,7 @@ cmakeConfigurePhase() {
     # injects the correct include order via NIX_CFLAGS_COMPILE; the cmake-emitted
     # -isystem is redundant and harmful.  Covers both generators: Ninja (*.ninja)
     # and Unix Makefiles (CMakeFiles/**/flags.make).  Pattern cross-debug/32+41.
-    if [[ "${NIX_IS_PSEUDO_CROSS-}" == "1" ]]; then
+    if [[ "${NIX_IS_INTRA_ISA_CROSS-}" == "1" ]]; then
         find . \( -name '*.ninja' -o -name 'flags.make' \) \
             | xargs -r sed -Ei \
                 's| -isystem /nix/store/[a-z0-9]{32}-glibc-[^ ]*/include||g'
@@ -241,6 +241,17 @@ addCMakeProgramPath() {
     if [ -d "$1/bin" ]; then addToSearchPath CMAKE_PROGRAM_PATH "$1/bin"; fi
 }
 addEnvHooks "$targetOffset" addCMakeProgramPath
+
+# Gap3: Populate NIXPKGS_CMAKE_PREFIX_PATH from nativeBuildInputs cmake dirs.
+# addCMakeParams fires at $targetOffset (HOST buildInputs), so cmake find_package()
+# finds HOST libraries but NOT cmake config files from nativeBuildInputs (ECM,
+# wayland-scanner, etc.).  addCMakeNativePrefixPath fires at $hostOffset (BUILD
+# side, depsBuildHost = nativeBuildInputs) to cover find_package() for build tools.
+# This complements F5 (find_program) and addCMakeParams (find_package HOST side).
+addCMakeNativePrefixPath() {
+    addToSearchPath NIXPKGS_CMAKE_PREFIX_PATH "$1"
+}
+addEnvHooks "$hostOffset" addCMakeNativePrefixPath
 
 # F12: Read cmake-cross-helper-flags from HOST buildInputs and prepend to
 # cmakeFlags. Packages write BUILD-platform cmake tool vars (Qt6*Tools_DIR,

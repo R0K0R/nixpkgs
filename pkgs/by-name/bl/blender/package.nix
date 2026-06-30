@@ -234,7 +234,7 @@ stdenv'.mkDerivation (finalAttrs: {
         fi
       )
     ''
-    + lib.optionalString (stdenv.isPseudoCross or false && waylandSupport) ''
+    + lib.optionalString (stdenv.isIntraISACross or false && waylandSupport) ''
       # In pseudo-cross, cmake uses the HOST pkg-config wrapper (set via PKG_CONFIG
       # by F4's env-hook relax).  The HOST wrapper's salt-keyed PKG_CONFIG_PATH only
       # has HOST pkgconfig dirs; the BUILD wayland-scanner .pc is in

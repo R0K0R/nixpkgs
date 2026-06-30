@@ -14,7 +14,7 @@
 # architecture-independent, so use the BUILD-platform derivation directly.
 # No circular evaluation: pkgsBuildBuild.kdePackages.breeze-icons evaluates
 # with buildPlatform == hostPlatform and takes the mkKdeDerivation branch.
-if (stdenv.isPseudoCross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform
+if (stdenv.isIntraISACross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform
 then pkgsBuildBuild.kdePackages.breeze-icons
 else
   mkKdeDerivation {

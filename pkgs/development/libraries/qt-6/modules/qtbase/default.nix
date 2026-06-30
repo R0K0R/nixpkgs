@@ -336,7 +336,7 @@ stdenv.mkDerivation {
   # GCC; -isystem is respected in order.  Both generic and target-specific dirs
   # are required (the latter provides bits/c++config.h).
   env.NIX_CXXFLAGS_COMPILE_BEFORE =
-    lib.optionalString (isCrossBuild || (stdenv.isPseudoCross or false))
+    lib.optionalString (isCrossBuild || (stdenv.isIntraISACross or false))
       ("-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}"
       + " -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config}");
 

@@ -67,7 +67,7 @@ stdenv'.mkDerivation (finalAttrs: {
   '';
 
   postInstall =
-    if (stdenv.isPseudoCross or (!stdenv.buildPlatform.canExecute stdenv.hostPlatform)) then ''
+    if (stdenv.isIntraISACross or (!stdenv.buildPlatform.canExecute stdenv.hostPlatform)) then ''
       # Cross/pseudo-cross: setup.py egg_info triggers qtinfo.py which runs a
       # cmake config test requiring Qt6CoreTools in CMAKE_PREFIX_PATH.
       # Qt6CoreTools only exists in the BUILD-platform qtbase; HOST qtbase (which
