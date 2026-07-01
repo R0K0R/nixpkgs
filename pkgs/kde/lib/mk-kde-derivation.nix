@@ -105,6 +105,7 @@ let
     mkdir -p "$out"
     ln -s "${pkgsBuildBuild.kdePackages.kdoctools.dev}/lib/cmake/KF6DocTools" "$out/KF6DocTools"
     ln -s "${pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake/KF6Config"    "$out/KF6Config"
+    ln -s "${pkgsBuildBuild.kdePackages.kpackage.dev}/lib/cmake/KF6Package"  "$out/KF6Package"
   '';
 in
 {
