@@ -103,9 +103,10 @@ let
   # binaries — no path patching needed.  Pattern B / cross-debug/65 + 66.
   kf6HostTooling = pkgsBuildBuild.runCommand "kf6-host-tooling" { } ''
     mkdir -p "$out"
-    ln -s "${pkgsBuildBuild.kdePackages.kdoctools.dev}/lib/cmake/KF6DocTools" "$out/KF6DocTools"
-    ln -s "${pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake/KF6Config"    "$out/KF6Config"
-    ln -s "${pkgsBuildBuild.kdePackages.kpackage.dev}/lib/cmake/KF6Package"  "$out/KF6Package"
+    ln -s "${pkgsBuildBuild.kdePackages.kdoctools.dev}/lib/cmake/KF6DocTools"   "$out/KF6DocTools"
+    ln -s "${pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake/KF6Config"      "$out/KF6Config"
+    ln -s "${pkgsBuildBuild.kdePackages.kpackage.dev}/lib/cmake/KF6Package"    "$out/KF6Package"
+    ln -s "${pkgsBuildBuild.kdePackages.kcmutils.dev}/lib/cmake/KF6KCMUtils"   "$out/KF6KCMUtils"
   '';
 in
 {
