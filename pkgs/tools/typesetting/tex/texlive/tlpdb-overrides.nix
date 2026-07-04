@@ -586,7 +586,9 @@ lib.recursiveUpdate orig rec {
     extraNativeBuildInputs = [ installShellFiles ];
 
     # build Data.tlpdb.lua (part of the 'tlType == "run"' package)
-    postUnpack = ''
+    # texlua here is compiled for HOST; skip in cross builds where the
+    # build machine can't execute it.
+    postUnpack = lib.optionalString (stdenv.buildPlatform == stdenv.hostPlatform) ''
       if [[ -f "$out"/scripts/texdoc/texdoc.tlu ]]; then
         unxz --stdout "${tlpdbxz}" > texlive.tlpdb
 
@@ -602,8 +604,8 @@ lib.recursiveUpdate orig rec {
       fi
     '';
 
-    # install zsh completion
-    postFixup = ''
+    # install zsh completion — also requires running HOST texlua
+    postFixup = lib.optionalString (stdenv.buildPlatform == stdenv.hostPlatform) ''
       TEXMFCNF="${pkgs.kpathsea.tex}"/web2c TEXMF="$scriptsFolder/../.." \
         texlua "$out"/bin/texdoc --print-completion zsh > "$TMPDIR"/_texdoc
       installShellCompletion --zsh "$TMPDIR"/_texdoc
