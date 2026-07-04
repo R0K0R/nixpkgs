@@ -42,6 +42,15 @@ stdenv.mkDerivation (finalAttrs: {
     makeBinaryWrapper
     meson
     ninja
+  ];
+
+  # man/meson.build calls dependency('scdoc', native: true) — meson resolves
+  # native (build-machine) pkg-config deps via PKG_CONFIG_FOR_BUILD, which is
+  # only exported when pkg-config is a depsBuildBuild (-1 -> -1) input.
+  # nativeBuildInputs is depsBuildHost (-1 -> 0): its pkg-config wrapper only
+  # exports plain PKG_CONFIG, so meson's native lookup silently fails to find
+  # scdoc.pc in any cross build.
+  depsBuildBuild = [
     pkg-config
     scdoc
   ];
