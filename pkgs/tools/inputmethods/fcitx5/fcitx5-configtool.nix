@@ -34,15 +34,21 @@ let
   # Reliable cross-or-pseudo-cross detection (see mk-kde-derivation.nix).
   isCrossOrPseudo =
     (stdenv.isIntraISACross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
-  # KCMUtils' own cmake config checks `CMAKE_CROSSCOMPILING AND KF6_HOST_TOOLING`
-  # to swap in BUILD-platform tool targets for its kcmutils_add_plugin() codegen
-  # step, rather than running a HOST-linked `*-desktop-gen` binary that SIGILLs
-  # on the BUILD machine. mkKdeDerivation wires this automatically for KDE-native
-  # packages via a shared kf6HostTooling dir; this package is plain
-  # stdenv.mkDerivation so it needs its own copy of the same fix.
+  # Several KDE framework cmake configs check `CMAKE_CROSSCOMPILING AND
+  # KF6_HOST_TOOLING` to swap in BUILD-platform tool targets instead of running
+  # a HOST-linked codegen binary that SIGILLs on the BUILD machine: KCMUtils'
+  # kcmutils_add_plugin() (desktop-gen), KF6Config's kconfig_compiler, and
+  # KF6Package (pulled in transitively via kdeclarative -> KF6Config and
+  # libplasma -> KF6Package). mkKdeDerivation wires this automatically for
+  # KDE-native packages via a shared kf6HostTooling dir; this package is plain
+  # stdenv.mkDerivation so it needs its own copy of the same fix, covering
+  # every framework whose *Config.cmake this package's dependency graph pulls
+  # in that uses the pattern (see mk-kde-derivation.nix's kf6HostTooling).
   kf6HostTooling = pkgsBuildBuild.runCommand "fcitx5-configtool-host-tooling" { } ''
     mkdir -p "$out"
     ln -s "${pkgsBuildBuild.kdePackages.kcmutils.dev}/lib/cmake/KF6KCMUtils" "$out/KF6KCMUtils"
+    ln -s "${pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake/KF6Config"    "$out/KF6Config"
+    ln -s "${pkgsBuildBuild.kdePackages.kpackage.dev}/lib/cmake/KF6Package" "$out/KF6Package"
   '';
 in
 
