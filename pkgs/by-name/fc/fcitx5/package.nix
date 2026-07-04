@@ -6,6 +6,7 @@
   pkg-config,
   buildPackages,
   cmake,
+  ninja,
   kdePackages,
   wayland-scanner,
   cairo,
@@ -61,6 +62,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     cmake
+    ninja
     pkg-config
     wayland-scanner
     gettext
