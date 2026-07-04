@@ -65,14 +65,24 @@ stdenv.mkDerivation (finalAttrs: {
     })
   ];
 
-  postPatch = ''
-    patchShebangs \
-      tests/test-runner.sh \
-      tests/unittest_inspector.py \
-      tests/virtual-image.py \
-      tests/umockdev-test.py \
-      tests/test-generated-hwdb.sh
-  '';
+  postPatch =
+    lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+      # The tests and examples subdirs aren't cross-compile-clean (examples
+      # references installed_tests from tests), and running tests requires
+      # executing HOST binaries, which isn't possible in a cross build anyway.
+      sed -i \
+        "s|^subdir('tests')$|# subdir('tests') -- disabled in cross builds|;
+         s|^subdir('examples')$|# subdir('examples') -- disabled in cross builds (references installed_tests from tests)|" \
+        meson.build
+    ''
+    + ''
+      patchShebangs \
+        tests/test-runner.sh \
+        tests/unittest_inspector.py \
+        tests/virtual-image.py \
+        tests/umockdev-test.py \
+        tests/test-generated-hwdb.sh
+    '';
 
   nativeBuildInputs = [
     pkg-config
@@ -94,6 +104,17 @@ stdenv.mkDerivation (finalAttrs: {
     openssl
   ];
 
+  # meson's needs_exe_wrapper auto-detection assumes cross means "can't run
+  # HOST binaries at all," which triggers extra machinery this package
+  # doesn't need. In intra-ISA cross specifically, disable it explicitly.
+  preConfigure = lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    cat > "$TMPDIR/pseudo-cross-no-exe-wrapper.ini" <<'EOF'
+    [properties]
+    needs_exe_wrapper = false
+    EOF
+    mesonFlagsArray+=("--cross-file" "$TMPDIR/pseudo-cross-no-exe-wrapper.ini")
+  '';
+
   mesonFlags = [
     "-Dudev_rules_dir=${placeholder "out"}/lib/udev/rules.d"
     # Include virtual drivers for fprintd tests
@@ -109,7 +130,10 @@ stdenv.mkDerivation (finalAttrs: {
   # the right place.
   doCheck = false;
 
-  doInstallCheck = true;
+  # In cross builds the tests subdir is skipped at configure time
+  # (virtual-image.py imports gi.repository.FPrint, which needs the built
+  # library, unavailable at that point in a cross build).
+  doInstallCheck = stdenv.hostPlatform == stdenv.buildPlatform;
 
   installCheckPhase = ''
     runHook preInstallCheck
