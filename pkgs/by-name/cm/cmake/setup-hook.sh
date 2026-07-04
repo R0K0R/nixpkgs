@@ -101,6 +101,49 @@ cmakeConfigurePhase() {
     local flagsArray=()
     concatTo flagsArray cmakeFlags cmakeFlagsArray
 
+    # Forward every -D flag from this configure invocation into a
+    # CMAKE_PROJECT_INCLUDE preload file, as forced CACHE entries, so that
+    # ExternalProject_Add/FetchContent sub-builds (which run their own
+    # separate cmake configure, ignoring most of the outer flagsArray) still
+    # inherit compiler/toolchain/cross settings from the outer invocation
+    # instead of silently re-detecting (and potentially getting wrong) their
+    # own. Toolchain/install-path variables are excluded since they're either
+    # sub-build-specific (install dirs) or would create a self-reference
+    # (CMAKE_PROJECT_INCLUDE itself).
+    local _nixpkgsPreload="$TMPDIR/nixpkgs-cmake-preload.cmake"
+    : > "$_nixpkgsPreload"
+    local _f _k _v
+    for _f in "${flagsArray[@]}"; do
+        case "$_f" in
+            -D*=*)
+                _k="${_f#-D}"; _k="${_k%%=*}"
+                _v="${_f#-D*=}"
+                case "$_k" in
+                    CMAKE_PROJECT_INCLUDE|\
+                    CMAKE_C_COMPILER|CMAKE_CXX_COMPILER|\
+                    CMAKE_AR|CMAKE_RANLIB|CMAKE_STRIP|\
+                    CMAKE_INSTALL_PREFIX|CMAKE_INSTALL_NAME_DIR|\
+                    CMAKE_INSTALL_BINDIR|CMAKE_INSTALL_SBINDIR|\
+                    CMAKE_INSTALL_INCLUDEDIR|CMAKE_INSTALL_MANDIR|\
+                    CMAKE_INSTALL_INFODIR|CMAKE_INSTALL_DOCDIR|\
+                    CMAKE_INSTALL_LIBDIR|CMAKE_INSTALL_LIBEXECDIR|\
+                    CMAKE_INSTALL_LOCALEDIR|\
+                    CMAKE_FIND_USE_PACKAGE_REGISTRY|\
+                    CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY|\
+                    CMAKE_EXPORT_NO_PACKAGE_REGISTRY|\
+                    CMAKE_BUILD_TYPE|BUILD_TESTING)
+                        : ;;
+                    *)
+                        printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
+                        ;;
+                esac
+                ;;
+        esac
+    done
+    if [ -s "$_nixpkgsPreload" ]; then
+        flagsArray=("-DCMAKE_PROJECT_INCLUDE=$_nixpkgsPreload" "${flagsArray[@]}")
+    fi
+
     echoCmd 'cmake flags' "${flagsArray[@]}"
 
     cmake "$cmakeDir" "${flagsArray[@]}"
