@@ -34,6 +34,7 @@
   gnugrep ? null,
   expand-response-params,
   libcxx ? null,
+  buildPackages ? null,
 
   # Whether or not to add `-B` and `-L` to `nix-support/cc-{c,ld}flags`
   useCcForLibs ?
@@ -409,6 +410,11 @@ let
   useMacroPrefixMap = !isGNU && !isFlang;
   systemIncludeFlag = if isFlang || isArocc then "-I" else "-idirafter";
   fortifyIncludeFlag = if isFlang then "-I" else "-isystem";
+
+  # BUILD-platform cc-wrapper for pseudo-cross plain-name compiler symlinks (F2).
+  # Null in bootstrap stages or when configs differ (real cross).
+  buildCC =
+    if buildPackages != null then (buildPackages.stdenv.cc or null) else null;
 in
 
 assert includeFortifyHeaders' -> fortify-headers != null;
@@ -616,6 +622,17 @@ stdenvNoCC.mkDerivation {
   + optionalString cc.langGo or false ''
     wrap ${targetPrefix}gccgo $wrapper $ccPath/${targetPrefix}gccgo
     wrap ${targetPrefix}go ${./go-wrapper.sh} $ccPath/${targetPrefix}go
+  ''
+
+  # F2: pseudo-cross plain compiler symlinks → BUILD-platform cc-wrapper.
+  # Pattern A1 (bare gcc absent), A2-clang (bare clang absent), G1 (qmake probe).
+  # CC/CXX env vars still point at the prefixed HOST wrapper for HOST compilation.
+  + optionalString (targetPrefix != "" && targetPlatform.config == hostPlatform.config && buildCC != null) ''
+    for binary in gcc g++ cc c++ cpp clang clang++ clang-cpp; do
+      if [ -e "${buildCC}/bin/$binary" ] && [ ! -e "$out/bin/$binary" ]; then
+        ln -s "${buildCC}/bin/$binary" "$out/bin/$binary"
+      fi
+    done
   '';
 
   strictDeps = true;
