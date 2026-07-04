@@ -1,10 +1,19 @@
 if [[ -n "${__nix_qtbase-}" ]]; then
     # Throw an error if a different version of Qt was already set up.
-    if [[ "$__nix_qtbase" != "@dev@" ]]; then
-        echo >&2 "Error: detected mismatched Qt dependencies:"
-        echo >&2 "    @dev@"
-        echo >&2 "    $__nix_qtbase"
-        exit 1
+    # In intra-ISA cross builds, BUILD and HOST share the same config string
+    # (same ABI), so BUILD-platform and HOST-platform qtbase coexist without
+    # harm. Skip the version-mismatch check entirely in that case.
+    if [[ -z "${NIX_IS_INTRA_ISA_CROSS-}" ]]; then
+        # Compare by package name (strip store hash) rather than full path so
+        # that genuine mismatches (5.14 vs 5.15) still fail.
+        _qt_name_cur="@dev@"; _qt_name_cur="${_qt_name_cur##*/}"; _qt_name_cur="${_qt_name_cur#*-}"
+        _qt_name_set="$__nix_qtbase"; _qt_name_set="${_qt_name_set##*/}"; _qt_name_set="${_qt_name_set#*-}"
+        if [[ "$_qt_name_cur" != "$_qt_name_set" ]]; then
+            echo >&2 "Error: detected mismatched Qt dependencies:"
+            echo >&2 "    @dev@"
+            echo >&2 "    $__nix_qtbase"
+            exit 1
+        fi
     fi
 else # Only set up Qt once.
 __nix_qtbase="@dev@"
