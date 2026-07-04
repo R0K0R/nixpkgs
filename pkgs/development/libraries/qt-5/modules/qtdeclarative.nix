@@ -17,6 +17,11 @@ qtModule {
     "dev"
     "bin"
   ];
+  postPatch = ''
+    # GCC 15 no longer transitively includes <cstdint> via other standard
+    # headers, so uint32_t/uint64_t used here are no longer declared.
+    sed -i '/#include <QCryptographicHash>/a #include <cstdint>' src/qml/compiler/qv4compiler.cpp
+  '';
   preConfigure = ''
     NIX_CFLAGS_COMPILE+=" -DNIXPKGS_QML2_IMPORT_PREFIX=\"$qtQmlPrefix\""
   '';
