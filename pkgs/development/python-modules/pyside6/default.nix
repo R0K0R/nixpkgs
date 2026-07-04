@@ -74,6 +74,27 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail \
         'string(FIND "''${_module_dir}" "''${_core_abs_dir}" found_basepath)' \
         'set (found_basepath 0)'
+
+    # QWebEngineExtensionInfo/Manager are guarded by
+    # QT_CONFIG(webengine_extensions), which is disabled in this qtwebengine
+    # build (-1). shiboken6 finds no class definition for them and skips
+    # generating the wrapper .cpp files, but cmake still tries to compile them
+    # from two hardcoded places that don't know that:
+    #   1. PySide6/QtWebEngineCore/CMakeLists.txt -- explicit source list
+    #   2. PySide6/QtWebEngineCore/typesystem_webenginecore.xml -- shiboken6 typesystem
+    # Patch both so cmake and shiboken6 agree on what actually gets generated.
+    sed -i '/QWebEngineExtension/d' PySide6/QtWebEngineCore/typesystem_webenginecore.xml
+    sed -i '/qwebengineextension/d' PySide6/QtWebEngineCore/CMakeLists.txt
+
+    # In cross builds, the HOST qtbase has no Qt6CoreTools (a BUILD-only
+    # package). Qt6CoreConfig.cmake requires it, but the mkspecs cmake probe
+    # this invokes only reads feature flags -- it never actually needs the
+    # tools themselves. QT_ALLOW_MISSING_TOOLS_PACKAGES suppresses that hard
+    # failure.
+    substituteInPlace ../../build_scripts/qtinfo.py \
+      --replace-fail \
+        'cmake_cache_args.extend(platform_cmake_options(as_tuple_list=True))' \
+        'cmake_cache_args.extend(platform_cmake_options(as_tuple_list=True)); cmake_cache_args.append(("QT_ALLOW_MISSING_TOOLS_PACKAGES", "TRUE"))'
   ''
   + lib.optionalString stdenv.hostPlatform.isDarwin ''
     substituteInPlace cmake/PySideHelpers.cmake \
@@ -119,7 +140,8 @@ stdenv.mkDerivation (finalAttrs: {
   postInstall = ''
     cd ../../..
     chmod +w .
-    ${python.pythonOnBuildForHost.interpreter} setup.py egg_info --build-type=pyside6
+    ${python.pythonOnBuildForHost.interpreter} setup.py egg_info --build-type=pyside6 \
+      --qtpaths ${python.pkgs.qt6.qtbase}/bin/qtpaths6
     cp -r PySide6.egg-info $out/${python.sitePackages}/
 
     mkdir -p "$devtools"
