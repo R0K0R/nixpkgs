@@ -908,7 +908,7 @@ _addToEnv() {
         for depTargetOffset in "${allPlatOffsets[@]}"; do
             (( depHostOffset <= depTargetOffset )) || continue
             local hookRef="${hookVar}[$depTargetOffset - $depHostOffset]"
-            if [[ -z "${strictDeps-}" ]]; then
+            if [[ -z "${strictDeps-}" || "${NIX_IS_INTRA_ISA_CROSS-}" == "1" ]]; then
 
                 # Keep track of which packages we have visited before.
                 local visitedPkgs=""
@@ -917,6 +917,20 @@ _addToEnv() {
                 # compilation to ease the transition.
                 #
                 # TODO(@Ericson2314): Don't special-case native compilation
+                #
+                # In intra-ISA cross (same config string, different gcc.arch —
+                # see stdenv.isIntraISACross), the ABI hazards that strictDeps
+                # guards against (wrong library rpaths, wrong sonames) don't
+                # apply because BUILD and HOST share the same config string
+                # (= same ABI: calling conventions, sysroot, struct layout).
+                # NOTE: binary executability is NOT assumed — znver5 cannot run
+                # meteorlake binaries (waitpkg → SIGILL).  The ABI-safety
+                # argument holds; the ISA-executability argument does not.
+                # Running HOST buildInputs' setup hooks (qmakePathHook, Qt cmake
+                # env hook, ECM, pkg-config, …) here is safe and necessary to
+                # populate QMAKEPATH, QT_ADDITIONAL_PACKAGES_PREFIX_PATH, etc.
+                # NIX_IS_INTRA_ISA_CROSS=1 is set by make-derivation.nix when
+                # stdenv.isIntraISACross is true.
                 for pkg in \
                     "${pkgsBuildBuild[@]}" \
                     "${pkgsBuildHost[@]}" \
