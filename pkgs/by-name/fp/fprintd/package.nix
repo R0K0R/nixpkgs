@@ -51,6 +51,9 @@ stdenv.mkDerivation (finalAttrs: {
     dbus
     docbook-xsl-nons
     docbook_xml_dtd_412
+  ]
+  ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    glib.dev # provides gdbus-codegen (a Python script, not ISA-specific)
   ];
 
   buildInputs = [
