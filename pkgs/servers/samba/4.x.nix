@@ -336,7 +336,10 @@ stdenv.mkDerivation (finalAttrs: {
     wrapPythonPrograms
   '';
 
-  disallowedReferences = lib.optionals isCross [
+  # In intra-ISA cross builds, BUILD and HOST share the same config string
+  # (same ABI), so BUILD python/shell references in the output are harmless;
+  # skip the check in that case.
+  disallowedReferences = lib.optionals (isCross && !(stdenv.isIntraISACross or false)) [
     buildPackages.python3Packages.python
     buildPackages.runtimeShellPackage
   ];
