@@ -165,3 +165,20 @@ makeCmakeFindLibs() {
 # not using setupHook, because it could be a setupHook adding additional
 # include flags to NIX_CFLAGS_COMPILE
 postHooks+=(makeCmakeFindLibs)
+
+# Read cmake-cross-helper-flags from a dependency's nix-support and prepend
+# each line to cmakeFlags. This lets a package (typically one that itself
+# needed some cross-build-specific cmake variable, such as a BUILD-platform
+# tool directory) write flags into a well-known nix-support file, and have
+# every downstream consumer automatically forward those flags into its own
+# cmake invocation, without every consumer needing to know the flag itself.
+addCMakeCrossHelperFlags() {
+    local _pkg="$1"
+    if [ -f "$_pkg/nix-support/cmake-cross-helper-flags" ]; then
+        local _flag
+        while IFS= read -r _flag || [ -n "$_flag" ]; do
+            if [ -n "$_flag" ]; then prependToVar cmakeFlags "$_flag"; fi
+        done < "$_pkg/nix-support/cmake-cross-helper-flags"
+    fi
+}
+addEnvHooks "$hostOffset" addCMakeCrossHelperFlags
