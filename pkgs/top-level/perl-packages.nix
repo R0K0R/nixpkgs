@@ -16688,6 +16688,13 @@ with self;
     };
     buildInputs = [ TestFatal ];
     propagatedBuildInputs = [ HTMLParser ];
+    # Build.PL's add_to_cleanup triggers Module::Build's delete_filetree,
+    # which calls File::Path::rmtree -> Cwd::fastcwd(). In some build
+    # environments fastcwd() returns a trailing newline, and Perl 5.42
+    # crashes trying to stat() a path containing one.
+    postPatch = ''
+      sed -i '/add_to_cleanup/d' Build.PL
+    '';
     meta = {
       description = "Work with HTML in a DOM-like tree structure";
       license = with lib.licenses; [
