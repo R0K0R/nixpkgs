@@ -128,6 +128,17 @@ fi
 
 addEnvHooks "$targetOffset" addCMakeParams
 
+# addCMakeParams above fires at $targetOffset (HOST buildInputs), so
+# find_package() finds HOST libraries' cmake configs but not those from
+# nativeBuildInputs (e.g. ECM, wayland-scanner). Populate the same variable
+# from nativeBuildInputs (depsBuildHost = $hostOffset) so find_package() also
+# resolves build-time tools' cmake configs. Complements addCMakeProgramPath
+# (find_program) and addCMakeParams (find_package, HOST side) above.
+addCMakeNativePrefixPath() {
+    addToSearchPath NIXPKGS_CMAKE_PREFIX_PATH "$1"
+}
+addEnvHooks "$hostOffset" addCMakeNativePrefixPath
+
 makeCmakeFindLibs() {
     isystem_seen=
     iframework_seen=
