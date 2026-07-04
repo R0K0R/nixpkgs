@@ -290,9 +290,44 @@ qtModule {
 
   requiredSystemFeatures = [ "big-parallel" ];
 
-  preConfigure = ''
-    export NINJAFLAGS="-j$NIX_BUILD_CORES"
-  '';
+  postConfigure =
+    # cmake's create_pkg_config_host_wrapper() generates
+    # pkg-config-host_wrapper.sh, which unsets PKG_CONFIG_PATH before calling
+    # the nix HOST pkg-config wrapper. The nix wrapper's own variable
+    # accumulation reads plain PKG_CONFIG_PATH to populate its salted
+    # PKG_CONFIG_PATH_<salt> variable; finding it unset leaves that empty, so
+    # the wrapped pkg-config runs with no search paths and can't find e.g.
+    # icu-i18n. Remove only the PKG_CONFIG_PATH unset (keep the
+    # LIBDIR/SYSROOT_DIR ones) so HOST .pc paths survive into GN's
+    # pkg_config() calls.
+    lib.optionalString (!(stdenv.buildPlatform.canExecute stdenv.hostPlatform)) ''
+      find "$PWD" -name "pkg-config-host_wrapper.sh" | while IFS= read -r f; do
+        sed -i '/^unset PKG_CONFIG_PATH$/d' "$f"
+      done
+    '';
+
+  preConfigure =
+    # FindPkgConfigHost.cmake searches for plain "pkg-config" with
+    # NO_SYSTEM_ENVIRONMENT_PATH (skipping PATH entirely), but checks
+    # $ENV{PKG_CONFIG_HOST} first, so point that at the prefixed HOST
+    # pkg-config wrapper.
+    #
+    # Also set PKG_CONFIG so cmake's find_package(PkgConfig) resolves to the
+    # HOST pkg-config: QtToolchainHelpers.cmake's append_pkg_config_setup()
+    # sets the GN arg pkg_config="${PKG_CONFIG_EXECUTABLE}", and without this,
+    # cmake finds the BUILD-side pkg-config (which has no HOST library
+    # paths), so GN's pkg_config("system_icui18n") call fails with "Could not
+    # run pkg-config" (pkg-config exits 1 for unknown packages).
+    lib.optionalString (!(stdenv.buildPlatform.canExecute stdenv.hostPlatform)) ''
+      _hostPkgConfig=$(command -v "${stdenv.hostPlatform.config}-pkg-config" 2>/dev/null || true)
+      if [ -n "$_hostPkgConfig" ]; then
+        export PKG_CONFIG_HOST="$_hostPkgConfig"
+        export PKG_CONFIG="$_hostPkgConfig"
+      fi
+    ''
+    + ''
+      export NINJAFLAGS="-j$NIX_BUILD_CORES"
+    '';
 
   # Debug info is too big to link with LTO.
   separateDebugInfo = false;
