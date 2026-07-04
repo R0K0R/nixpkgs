@@ -110,6 +110,18 @@ let
   '';
 in
 {
+  # Exposed so non-mkKdeDerivation packages needing the same
+  # CMAKE_CROSSCOMPILING/KF6_HOST_TOOLING pattern (e.g. fcitx5-configtool) can
+  # reuse this single canonical, complete directory instead of hand-copying a
+  # partial subset per package (see fcitx5-configtool.nix for the fix this
+  # replaced — it initially missed KF6Config/KF6Package because they weren't
+  # copied from here).
+  inherit kf6HostTooling;
+
+  # Named _mkKdeDerivation, not `self` — `self` here would shadow this file's
+  # own top-level `self:` (the KDE package set), which every `self.sources.*` /
+  # `self.${dep}` reference below relies on.
+  __functor = _mkKdeDerivation: {
   pname,
   version ? self.sources.${pname}.version,
   src ? self.sources.${pname},
@@ -243,4 +255,5 @@ let
 
   pos = builtins.unsafeGetAttrPos "pname" args;
 in
-traceAllDuplicateDeps (stdenv.mkDerivation (defaultArgs // cleanArgs // { inherit meta pos; }))
+traceAllDuplicateDeps (stdenv.mkDerivation (defaultArgs // cleanArgs // { inherit meta pos; }));
+}
