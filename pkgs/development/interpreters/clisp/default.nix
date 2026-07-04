@@ -97,7 +97,12 @@ stdenv.mkDerivation {
   postPatch = ''
     sed -e 's@9090@64237@g' -i tests/socket.tst
     sed -i 's@/bin/pwd@${coreutils}&@' src/clisp-link.in
-    sed -i 's@1\.16\.2@${automake.version}@' src/aclocal.m4
+    # Replace any embedded automake version with the current major.minor.
+    # The source snapshot may have been generated with a different automake
+    # than the hardcoded 1.16.2 (e.g. 1.17); the installed binary is named
+    # automake-X.Y, not automake-X.Y.Z, so match on major.minor only.
+    find . -name aclocal.m4 -o -name Makefile.in | \
+      xargs sed -i "s/automake-[0-9][0-9]*\.[0-9][0-9]*/automake-${lib.versions.majorMinor automake.version}/g"
     find . -type f | xargs sed -e 's/-lICE/-lXau &/' -i
   '';
 
