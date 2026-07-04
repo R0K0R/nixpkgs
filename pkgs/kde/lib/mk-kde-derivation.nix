@@ -98,8 +98,31 @@ let
     };
     meta.license = lib.licenses.mit;
   } ./qmllint-hook.sh;
+
+  # Unified BUILD-platform KDE cmake tool directory. cmake's find_file()
+  # searches KF6_HOST_TOOLING for <Pkg>/<Pkg>ToolsTargets.cmake (one subdir
+  # per KDE framework that ships cross-build tools). Each symlink points at
+  # the BUILD-platform cmake install, whose targets already reference BUILD
+  # binaries, so no path patching is needed.
+  kf6HostTooling = pkgsBuildBuild.runCommand "kf6-host-tooling" { } ''
+    mkdir -p "$out"
+    ln -s "${pkgsBuildBuild.kdePackages.kdoctools.dev}/lib/cmake/KF6DocTools"   "$out/KF6DocTools"
+    ln -s "${pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake/KF6Config"      "$out/KF6Config"
+    ln -s "${pkgsBuildBuild.kdePackages.kpackage.dev}/lib/cmake/KF6Package"    "$out/KF6Package"
+    ln -s "${pkgsBuildBuild.kdePackages.kcmutils.dev}/lib/cmake/KF6KCMUtils"   "$out/KF6KCMUtils"
+  '';
 in
 {
+  # Exposed so non-mkKdeDerivation packages needing the same
+  # CMAKE_CROSSCOMPILING/KF6_HOST_TOOLING pattern can reuse this single
+  # canonical, complete directory instead of hand-assembling a partial subset
+  # themselves.
+  inherit kf6HostTooling;
+
+  # Named _mkKdeDerivation, not `self` -- `self` here would shadow this file's
+  # own top-level `self:` (the KDE package set), which every `self.sources.*` /
+  # `self.${dep}` reference below relies on.
+  __functor = _mkKdeDerivation: {
   pname,
   version ? self.sources.${pname}.version,
   src ? self.sources.${pname},
@@ -191,6 +214,15 @@ let
         "-DQt6ScxmlTools_DIR=${pkgsBuildBuild.qt6.qtscxml}/lib/cmake/Qt6ScxmlTools"
         "-DQt6RemoteObjectsTools_DIR=${pkgsBuildBuild.qt6.qtremoteobjects}/lib/cmake/Qt6RemoteObjectsTools"
         "-DQt6Quick3DTools_DIR=${pkgsBuildBuild.qt6.qtquick3d}/lib/cmake/Qt6Quick3DTools"
+        # KDE framework cmake configs check `CMAKE_CROSSCOMPILING AND
+        # KF6_HOST_TOOLING` and, when true, do find_file(<Pkg>/<Pkg>ToolsTargets.cmake
+        # PATHS ${KF6_HOST_TOOLING}) to load BUILD-platform tool targets instead
+        # of running HOST binaries that may not be executable on the build
+        # machine. kf6HostTooling aggregates every KDE framework's
+        # BUILD-platform cmake tool subdir into one tree, so this single value
+        # satisfies every framework that uses the pattern.
+        "-DCMAKE_CROSSCOMPILING=TRUE"
+        "-DKF6_HOST_TOOLING=${kf6HostTooling}"
       ]
       ++ extraCmakeFlags;
 
@@ -224,4 +256,5 @@ let
 
   pos = builtins.unsafeGetAttrPos "pname" args;
 in
-traceAllDuplicateDeps (stdenv.mkDerivation (defaultArgs // cleanArgs // { inherit meta pos; }))
+traceAllDuplicateDeps (stdenv.mkDerivation (defaultArgs // cleanArgs // { inherit meta pos; }));
+}
