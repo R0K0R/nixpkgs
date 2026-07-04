@@ -1,0 +1,25 @@
+From: NixOS maintainers <maintainers@nixos.org>
+Subject: [PATCH] tools: compiler: match glibc 2.42 __attribute_const__ definition exactly
+
+glibc 2.42 defines __attribute_const__ as:
+    # define __attribute_const__ __attribute__ ((__const__))
+in sys/cdefs.h (note the space before the first parenthesis).
+
+The kernel tools header previously defined it as empty.  GCC 15 warns
+when a macro is redefined to a different replacement list, and that
+warning is treated as -Werror in resolve_btfids and other host tools.
+
+Change the kernel tools definition to the exact token sequence glibc
+uses, including the space before "((".  With identical replacement lists
+the preprocessor accepts the redefinition silently per C11 6.10.3.
+
+--- a/tools/include/linux/compiler.h
++++ b/tools/include/linux/compiler.h
+@@ -119,7 +119,7 @@
+ 
+ #ifndef __attribute_const__
+-# define __attribute_const__
++# define __attribute_const__ __attribute__ ((__const__))
+ #endif
+ 
+ #ifndef __maybe_unused
