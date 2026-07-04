@@ -116,6 +116,7 @@ let
       qtvirtualkeyboard = callPackage ./modules/qtvirtualkeyboard.nix { };
       qtwayland = callPackage ./modules/qtwayland.nix { };
       qtwebchannel = callPackage ./modules/qtwebchannel.nix { };
+      qt6Gn = callPackage ./qt6-gn.nix { };
       qtwebengine = callPackage ./modules/qtwebengine {
         inherit (darwin) bootstrap_cmds;
       };
