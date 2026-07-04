@@ -223,16 +223,34 @@ stdenv'.mkDerivation (finalAttrs: {
     (lib.cmakeFeature "SSE2NEON_INCLUDE_DIR" "${sse2neon}/include")
   ];
 
-  preConfigure = ''
-    (
-      expected_python_version=$(grep -E --only-matching 'set\(_PYTHON_VERSION_SUPPORTED [0-9.]+\)' build_files/cmake/Modules/FindPythonLibsUnix.cmake | grep -E --only-matching '[0-9.]+')
-      actual_python_version="${python3.pythonVersion}"
-      if ! [[ "$actual_python_version" = "$expected_python_version" ]]; then
-        echo "wrong Python version, expected '$expected_python_version', got '$actual_python_version'" >&2
-        exit 1
+  preConfigure =
+    ''
+      (
+        expected_python_version=$(grep -E --only-matching 'set\(_PYTHON_VERSION_SUPPORTED [0-9.]+\)' build_files/cmake/Modules/FindPythonLibsUnix.cmake | grep -E --only-matching '[0-9.]+')
+        actual_python_version="${python3.pythonVersion}"
+        if ! [[ "$actual_python_version" = "$expected_python_version" ]]; then
+          echo "wrong Python version, expected '$expected_python_version', got '$actual_python_version'" >&2
+          exit 1
+        fi
+      )
+    ''
+    + lib.optionalString (stdenv.isIntraISACross or false && waylandSupport) ''
+      # In intra-ISA cross builds, cmake uses the HOST pkg-config wrapper (set
+      # via PKG_CONFIG by the strictDeps relax). The HOST wrapper's salt-keyed
+      # PKG_CONFIG_PATH only has HOST pkgconfig dirs; the BUILD wayland-scanner
+      # .pc is in ${wayland-scanner.dev}/lib/pkgconfig (accessible here because
+      # the Nix interpolation below adds wayland-scanner.dev to the build
+      # closure). Inject the BUILD .pc dir into the HOST wrapper's own salt
+      # variable so pkg_check_modules(WAYLAND_SCANNER wayland-scanner)
+      # succeeds.
+      host_pc_bin="$(command -v ${stdenv.hostPlatform.config}-pkg-config 2>/dev/null || true)"
+      if [ -n "$host_pc_bin" ]; then
+        pc_salt_var="$(grep -oE 'PKG_CONFIG_PATH_[A-Za-z0-9_]+' "$host_pc_bin" 2>/dev/null | head -1 || true)"
+        if [ -n "$pc_salt_var" ]; then
+          eval "export $pc_salt_var=\"${wayland-scanner.dev}/lib/pkgconfig:\$$pc_salt_var\""
+        fi
       fi
-    )
-  '';
+    '';
 
   nativeBuildInputs = [
     cmake
@@ -246,7 +264,7 @@ stdenv'.mkDerivation (finalAttrs: {
   ]
   ++ lib.optionals waylandSupport [
     pkg-config
-    wayland-scanner
+    (lib.getBin wayland-scanner)
   ];
 
   buildInputs = [
