@@ -197,6 +197,10 @@ lib.makeOverridable (
       # Required for deterministic builds along with some postPatch magic.
       ++ optional (lib.versionOlder version "5.19") ./randstruct-provide-seed.patch
       ++ optional (lib.versionAtLeast version "5.19") ./randstruct-provide-seed-5.19.patch
+      # GCC 15 + glibc 2.42: sys/cdefs.h defines __attribute_const__,
+      # conflicting with compiler_attributes.h when kernel host tools include
+      # both headers.
+      ++ optional (lib.versionAtLeast version "5.0") ./attribute-const-glibc-2.42-compat.patch
       # Linux 5.12 marked certain PowerPC-only symbols as GPL, which breaks
       # OpenZFS; this was fixed in Linux 5.19 so we backport the fix
       # https://github.com/openzfs/zfs/pull/13367
