@@ -350,6 +350,38 @@ rec {
             }
       );
 
+  useLLVMLinker =
+    stdenv:
+    if stdenv.targetPlatform.isDarwin then
+      throw "lld cannot emit Mach-O (Darwin) binaries via -fuse-ld=lld"
+    else
+      let
+        bintools = stdenv.cc.bintools.override {
+          extraBuildCommands = ''
+            pushd $out/bin
+            ln -s ${pkgs.buildPackages.lld}/bin/ld.lld ${stdenv.cc.bintools.targetPrefix}ld.lld
+          '' + lib.optionalString (stdenv.cc.bintools.targetPrefix != "") ''
+            ln -s ${stdenv.cc.bintools.targetPrefix}ld.lld ld.lld
+          '' + ''
+            popd
+          '';
+        };
+      in
+      stdenv.override (
+        old:
+        {
+          allowedRequisites = null;
+          cc = stdenv.cc.override { inherit bintools; };
+        }
+        // lib.optionalAttrs (stdenv.cc.isClang || stdenv.cc.isGNU) {
+          mkDerivationFromStdenv = extendMkDerivationArgs old (args: {
+            env = (args.env or { }) // {
+              NIX_CFLAGS_LINK = toString (args.env.NIX_CFLAGS_LINK or "") + " -fuse-ld=lld";
+            };
+          });
+        }
+      );
+
   useWildLinker =
     stdenv:
     if !stdenv.targetPlatform.isLinux then
