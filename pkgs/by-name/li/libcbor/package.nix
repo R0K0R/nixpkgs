@@ -39,6 +39,14 @@ stdenv.mkDerivation (finalAttrs: {
   # case‐insensitive Darwin systems.
   cmakeBuildDir = "build.dir";
 
+  # cmake cross mode fails to link the example executables (no main in the
+  # object list). Remove both the add_subdirectory and any
+  # set_property(DIRECTORY examples ...) referencing the now-absent
+  # directory (leaving the latter causes a configure error).
+  postPatch = lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    sed -i '/add_subdirectory(examples)/d;/set_property.*DIRECTORY.*examples/d' CMakeLists.txt
+  '';
+
   cmakeFlags =
     lib.optional finalAttrs.finalPackage.doCheck "-DWITH_TESTS=ON"
     ++ lib.optional (!stdenv.hostPlatform.isStatic) "-DBUILD_SHARED_LIBS=ON";
