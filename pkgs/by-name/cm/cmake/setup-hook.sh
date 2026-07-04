@@ -271,3 +271,13 @@ addCMakeCrossHelperFlags() {
     fi
 }
 addEnvHooks "$hostOffset" addCMakeCrossHelperFlags
+
+# Populate CMAKE_PROGRAM_PATH from nativeBuildInputs' bin/ dirs. cmake's
+# find_program() searches PATH and CMAKE_PROGRAM_PATH but not
+# NIXPKGS_CMAKE_PREFIX_PATH, so without this, find_program(TOOL) returns
+# NOTFOUND even when TOOL is present as a nativeBuildInput, unless it also
+# happens to be on PATH.
+addCMakeProgramPath() {
+    if [ -d "$1/bin" ]; then addToSearchPath CMAKE_PROGRAM_PATH "$1/bin"; fi
+}
+addEnvHooks "$targetOffset" addCMakeProgramPath
