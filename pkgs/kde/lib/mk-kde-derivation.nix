@@ -8,9 +8,17 @@ self:
   qt6,
   python3,
   python3Packages,
+  pkgsBuildBuild,
   jq,
 }:
 let
+  # Reliable cross-or-intra-ISA-cross detection: attrset comparison
+  # (hostPlatform != buildPlatform) can short-circuit on thunks in some
+  # contexts, so use the explicit predicate plus a canExecute fallback for
+  # true cross instead.
+  isCrossOrPseudo =
+    (stdenv.isIntraISACross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+
   dependencies = (lib.importJSON ../generated/dependencies.json).dependencies;
   projectInfo = lib.importJSON ../generated/projects.json;
 
@@ -167,7 +175,24 @@ let
     propagatedBuildInputs = deps ++ extraPropagatedBuildInputs;
     strictDeps = true;
 
-    cmakeFlags = [ "-DQT_MAJOR_VERSION=6" ] ++ extraCmakeFlags;
+    cmakeFlags = [ "-DQT_MAJOR_VERSION=6" ]
+      # Qt's cmake modules locate their *Tools packages (rcc, moc, qmlcachegen,
+      # qsb, etc.) via CMAKE_PREFIX_PATH, which in a cross build only contains
+      # HOST Qt paths. HOST Qt's *Tools packages contain HOST-architecture
+      # binaries, which may not be executable on the build machine (e.g. a
+      # different microarch tuning, or a genuinely different ISA). Point
+      # cmake explicitly at the BUILD-platform qt6 *Tools dirs instead, so
+      # cmake invokes tools it can actually run.
+      ++ lib.optionals isCrossOrPseudo [
+        "-DQt6CoreTools_DIR=${pkgsBuildBuild.qt6.qtbase}/lib/cmake/Qt6CoreTools"
+        "-DQt6QmlTools_DIR=${pkgsBuildBuild.qt6.qtdeclarative}/lib/cmake/Qt6QmlTools"
+        "-DQt6QuickTools_DIR=${pkgsBuildBuild.qt6.qtdeclarative}/lib/cmake/Qt6QuickTools"
+        "-DQt6ShaderToolsTools_DIR=${pkgsBuildBuild.qt6.qtshadertools}/lib/cmake/Qt6ShaderToolsTools"
+        "-DQt6ScxmlTools_DIR=${pkgsBuildBuild.qt6.qtscxml}/lib/cmake/Qt6ScxmlTools"
+        "-DQt6RemoteObjectsTools_DIR=${pkgsBuildBuild.qt6.qtremoteobjects}/lib/cmake/Qt6RemoteObjectsTools"
+        "-DQt6Quick3DTools_DIR=${pkgsBuildBuild.qt6.qtquick3d}/lib/cmake/Qt6Quick3DTools"
+      ]
+      ++ extraCmakeFlags;
 
     doInstallCheck = true;
 
