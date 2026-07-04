@@ -4,6 +4,7 @@
   makeScopeWithSplicing',
   fetchurl,
   qt6Packages,
+  pkgsBuildBuild,
   cmark,
   taglib,
   wayland-protocols,
@@ -51,7 +52,7 @@ let
           plasma
           ;
 
-        mkKdeDerivation = self.callPackage (import ./lib/mk-kde-derivation.nix self) { };
+        mkKdeDerivation = self.callPackage (import ./lib/mk-kde-derivation.nix self) { inherit pkgsBuildBuild; };
 
         # THIRD PARTY
         inherit
