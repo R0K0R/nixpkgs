@@ -434,6 +434,10 @@ rec {
       potrace
     ];
 
+    # ICU 76 moved ucol_openRules from libicuuc to libicui18n; upmendex's
+    # configure only requests the icu-uc and icu-io pkg-config components.
+    env.NIX_LDFLAGS = "-licui18n";
+
     # autoconf 2.72 has a bug where AC_PROG_CXX would reject c++20 compilers,
     # and attempts to switch to c++98 or c++11 instead of using the compiler's
     # default. when using gcc 16, which defaults to c++20, this causes
@@ -707,6 +711,11 @@ rec {
       core # kpathsea
       icu
     ];
+
+    # ICU 76 moved ucol_strcollUTF8 from libicuuc to libicui18n; the
+    # bibtex-x configure script only requests the icu-uc and icu-io
+    # pkg-config components.
+    env.NIX_LDFLAGS = "-licui18n";
 
     preConfigure = "cd texk/bibtex-x";
 
