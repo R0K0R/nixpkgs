@@ -140,6 +140,25 @@ cmakeConfigurePhase() {
                 ;;
         esac
     done
+    # cmakeTryRunCacheVars lets a package statically answer specific
+    # try_run()/check_c_source_runs() probes (as "VAR=value" entries) instead
+    # of letting cmake actually compile-and-execute the check. This matters
+    # in cross builds, where try_run() would otherwise attempt to execute a
+    # HOST-compiled binary on the BUILD machine, which fails outright when
+    # the two aren't executable-compatible. A package can also drop a
+    # cmake-try-run-cache.cmake file directly into its build dir for
+    # answers that don't fit the simple VAR=value form.
+    if [ -n "${cmakeTryRunCacheVars-}" ]; then
+        local _e
+        for _e in $cmakeTryRunCacheVars; do
+            _k="${_e%%=*}"; _v="${_e#*=}"
+            printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
+        done
+    fi
+    if [ -f "${cmakeDir}/cmake-try-run-cache.cmake" ]; then
+        cat "${cmakeDir}/cmake-try-run-cache.cmake" >> "$_nixpkgsPreload"
+    fi
+
     if [ -s "$_nixpkgsPreload" ]; then
         flagsArray=("-DCMAKE_PROJECT_INCLUDE=$_nixpkgsPreload" "${flagsArray[@]}")
     fi
