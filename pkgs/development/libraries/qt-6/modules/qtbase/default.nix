@@ -323,6 +323,28 @@ stdenv.mkDerivation {
 
   env.NIX_CFLAGS_COMPILE = "-DNIXPKGS_QT_PLUGIN_PREFIX=\"${qtPluginPrefix}\"";
 
+  # cmake re-emits the cross-compiler's implicit glibc include path as an
+  # explicit -isystem, which GCC promotes ahead of its own built-in C++
+  # system directories (an explicit -isystem takes priority, and GCC
+  # deduplicates the now-redundant built-in glibc entry away). <cstdlib>'s
+  # #include_next <stdlib.h> then can't find stdlib.h, because glibc ends up
+  # after the C++ headers in the search order instead of before them.
+  #
+  # Fix: inject the cross compiler's C++ headers via
+  # NIX_CXXFLAGS_COMPILE_BEFORE (C++-only) so they land ahead of cmake's
+  # -isystem glibc entry. Using NIX_CFLAGS_COMPILE_BEFORE instead would bleed
+  # into plain C compilation too, where GCC 15's c++/stdatomic.h (which only
+  # defines C++23 using-declarations) would shadow the real C11
+  # <stdatomic.h>, breaking anything that needs the latter.
+  # -isystem, not -I: -I for a built-in system directory is silently
+  # deduplicated away by GCC, but -isystem is respected in the given order.
+  # Both the generic and target-specific include dirs are needed (the latter
+  # provides bits/c++config.h).
+  env.NIX_CXXFLAGS_COMPILE_BEFORE =
+    lib.optionalString (isCrossBuild || (stdenv.isIntraISACross or false))
+      ("-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}"
+      + " -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config}");
+
   outputs = [
     "out"
     "dev"
