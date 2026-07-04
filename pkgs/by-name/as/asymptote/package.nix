@@ -154,7 +154,13 @@ stdenv.mkDerivation (finalAttrs: {
   # do not use bundled libgc.so
   configureFlags = [ "--enable-gc=system" ];
 
-  env.NIX_CFLAGS_COMPILE = "-I${boehmgc.dev}/include/gc";
+  env.NIX_CFLAGS_COMPILE = "-I${boehmgc.dev}/include/gc"
+    # libtirpc puts its rpc/ headers under include/tirpc/, not the standard
+    # include path. configure's PKG_CONFIG macro calls bare pkg-config (not
+    # $PKG_CONFIG), which bypasses the cross wrapper in cross builds, so
+    # -I.../tirpc from pkg-config's own --cflags output is never added.
+    # Inject it directly instead of relying on pkg-config to supply it.
+    + lib.optionalString stdenv.hostPlatform.isLinux " -I${libtirpc.dev}/include/tirpc";
 
   postInstall = ''
     rm "$out"/bin/xasy
