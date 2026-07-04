@@ -40,16 +40,11 @@ let
   # kcmutils_add_plugin() (desktop-gen), KF6Config's kconfig_compiler, and
   # KF6Package (pulled in transitively via kdeclarative -> KF6Config and
   # libplasma -> KF6Package). mkKdeDerivation wires this automatically for
-  # KDE-native packages via a shared kf6HostTooling dir; this package is plain
-  # stdenv.mkDerivation so it needs its own copy of the same fix, covering
-  # every framework whose *Config.cmake this package's dependency graph pulls
-  # in that uses the pattern (see mk-kde-derivation.nix's kf6HostTooling).
-  kf6HostTooling = pkgsBuildBuild.runCommand "fcitx5-configtool-host-tooling" { } ''
-    mkdir -p "$out"
-    ln -s "${pkgsBuildBuild.kdePackages.kcmutils.dev}/lib/cmake/KF6KCMUtils" "$out/KF6KCMUtils"
-    ln -s "${pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake/KF6Config"    "$out/KF6Config"
-    ln -s "${pkgsBuildBuild.kdePackages.kpackage.dev}/lib/cmake/KF6Package" "$out/KF6Package"
-  '';
+  # KDE-native packages via its own kf6HostTooling dir, now exposed as
+  # mkKdeDerivation.kf6HostTooling precisely so non-mkKdeDerivation packages
+  # like this one can reuse the single canonical, complete directory instead
+  # of hand-copying a partial (and easily incomplete) subset per package.
+  kf6HostTooling = pkgsBuildBuild.kdePackages.mkKdeDerivation.kf6HostTooling;
 in
 
 stdenv.mkDerivation rec {
