@@ -22076,7 +22076,16 @@ with self;
       # for unknown reason, the first run of Build fails
       ./Build || true
     '';
-    postPatch = lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    postPatch = ''
+      # delete_filetree uses File::Path::rmtree, which calls Cwd::getcwd() to
+      # save/restore the working directory. In some build environments,
+      # getcwd() returns a path with a trailing newline; Perl 5.42 then
+      # refuses to stat() the path ("filename containing newline"), rmtree
+      # returns 0, and delete_filetree dies. Use system("rm", "-rf") instead
+      # to bypass the entire File::Path cwd-tracking chain.
+      sed -i 's|File::Path::rmtree(\$_, 0, 0);|system("rm", "-rf", "--", $_);|g; s|File::Path::rmtree(\$f, 0, 0);|system("rm", "-rf", "--", $f);|g' \
+        lib/Module/Build/Base.pm
+    '' + lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
       # remove version check since miniperl uses a stub of File::Temp, which do not provide a version:
       # https://github.com/arsv/perl-cross/blob/master/cnf/stub/File/Temp.pm
       sed -i '/File::Temp/d' \
