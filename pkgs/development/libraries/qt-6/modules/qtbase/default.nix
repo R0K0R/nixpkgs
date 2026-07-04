@@ -345,6 +345,17 @@ stdenv.mkDerivation {
       ("-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}"
       + " -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config}");
 
+  # qatomicwait.cpp compiles with -mwaitpkg (the UMWAIT instruction) as part of
+  # libQt6Core, which makes waitpkg a *required* CPU feature for every tool
+  # that links it (rcc, qmlimportscanner, moc, ...) -- including the
+  # native/BUILD-platform copies of those tools, which must run on whatever
+  # machine is actually doing the build, not just on hosts new enough to
+  # support waitpkg. Strip the flag from the generated ninja rules after
+  # configure so native tools work on any x86_64 host.
+  postConfigure = lib.optionalString (!isCrossBuild) ''
+    find . -name '*.ninja' | xargs sed -i 's/ -mwaitpkg//g'
+  '';
+
   outputs = [
     "out"
     "dev"
