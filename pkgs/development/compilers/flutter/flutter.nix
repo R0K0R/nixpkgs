@@ -72,6 +72,7 @@ let
       jq
       gitMinimal
       installShellFiles
+      which
     ]
     ++ lib.optionals stdenv.hostPlatform.isDarwin [ darwin.DarwinTools ];
 
@@ -162,9 +163,13 @@ let
       runHook postInstall
     '';
 
-    postInstall = ''
-      $out/bin/flutter bash-completion "$TMPDIR/flutter.bash"
-      installShellCompletion --bash "$TMPDIR/flutter.bash"
+    postInstall =
+      lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+        export HOME=$(mktemp -d)
+      ''
+      + ''
+        $out/bin/flutter bash-completion "$TMPDIR/flutter.bash"
+        installShellCompletion --bash "$TMPDIR/flutter.bash"
       installShellCompletion --zsh "$TMPDIR/flutter.bash"
     '';
 
