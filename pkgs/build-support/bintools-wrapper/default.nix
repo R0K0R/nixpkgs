@@ -271,6 +271,33 @@ stdenvNoCC.mkDerivation {
       basename=$(basename "${if exeSuffix != "" then "\${variant%${exeSuffix}}" else "$variant"}")
       wrap $basename ${./ld-wrapper.sh} $variant
     done
+
+    ${optionalString (targetPrefix != "" && targetPlatform.config == stdenvNoCC.hostPlatform.config) ''
+      # Intra-ISA cross: targetPlatform.config == hostPlatform.config but gcc.arch
+      # differs (e.g. x86_64-unknown-linux-gnu + meteorlake vs znver5).
+      # The cross bintools wrapper installs only prefixed names.  Build systems
+      # (collect2, autoconf, qmake sub-makes) that use config-string comparison to
+      # detect native/cross call plain binutils names assuming a native build.
+      # Plain-name symlinks → HOST bintools are safe: same ABI, no code generation.
+      #
+      # Note: the targetPlatform.config guard is intentional and must NOT be
+      # removed for true cross (e.g. x86_64 → aarch64).  In true cross, collect2
+      # calls the prefixed ld (it detects cross via different config strings), and
+      # plain `ld` in PATH must remain BUILD ld.  Generalizing to all cross would
+      # shadow BUILD bintools with HOST bintools for any bare-name call.
+      for binary in objdump objcopy nm strip ar ranlib as size strings readelf \
+                    addr2line c++filt gprof dwp elfedit; do
+        if [ -e "$out/bin/${targetPrefix}''${binary}${exeSuffix}" ]; then
+          ln -sf "${targetPrefix}''${binary}${exeSuffix}" "$out/bin/''${binary}${exeSuffix}"
+        fi
+      done
+      if [ -e "$out/bin/${targetPrefix}ld${exeSuffix}" ]; then
+        ln -sf "${targetPrefix}ld${exeSuffix}" "$out/bin/ld${exeSuffix}"
+      fi
+      if [ -e "$out/bin/${targetPrefix}ld.bfd${exeSuffix}" ]; then
+        ln -sf "${targetPrefix}ld.bfd${exeSuffix}" "$out/bin/ld.bfd${exeSuffix}"
+      fi
+    ''}
   '';
 
   strictDeps = true;
