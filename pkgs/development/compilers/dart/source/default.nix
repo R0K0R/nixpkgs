@@ -155,6 +155,14 @@ dart-bin.overrideAttrs (oldAttrs: {
   postPatch = ''
     sed --in-place 's/"-fsanitize=memory"//g' build/config/compiler/BUILD.gn
     patchShebangs runtime/tools/
+    # A C linkage declaration conflict is a fatal error under -Werror; drop it.
+    sed --in-place 's/"-Werror"//g' build/config/compiler/BUILD.gn
+    # GCC 15 removed these C math functions from the global namespace in C++
+    # headers; qualify unqualified calls with std:: (leaving already-qualified
+    # calls alone).
+    for func in fpclassify signbit isnan isinf isfinite; do
+      sed --in-place -E "s/(^|[^:])''${func}\(/\1std::''${func}(/g" runtime/vm/simulator_riscv.cc
+    done
     sed --in-place 's/ldflags = pkgresult\[4\]/ldflags = []/' build/config/linux/pkg_config.gni
     cp ${
       fetchurl {
