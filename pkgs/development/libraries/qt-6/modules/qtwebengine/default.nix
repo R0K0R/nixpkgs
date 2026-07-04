@@ -90,9 +90,24 @@ qtModule {
     pkg-config
     (python3.withPackages (ps: with ps; [ html5lib ]))
     which
-    gn
     nodejs
   ]
+  # In cross builds, FindGn.cmake requires exactly QT_REPO_MODULE_VERSION
+  # (6.140.0 for this release). The stock nixpkgs gn reports "2341" (upstream
+  # GN revision) -> version mismatch -> Gn_FOUND=FALSE -> FATAL_ERROR. Use the
+  # Qt-patched gn (built by qt6Gn from src/3rdparty/gn/) which reports
+  # "6.140.0.qtwebengine.qt.io" and satisfies the exact version requirement.
+  # In native builds, gn's version still mismatches, but the FATAL_ERROR path
+  # isn't reached (CMAKE_CROSSCOMPILING=FALSE) -- qtwebengine builds its own
+  # gn from source via ExternalProject_Add instead, so native builds keep
+  # using the system gn in PATH (find_program fails to satisfy Gn_FOUND and
+  # falls through to that path, unaffected either way).
+  ++ (
+    if !stdenv.buildPlatform.canExecute stdenv.hostPlatform then
+      [ buildPackages.qt6.qt6Gn ]
+    else
+      [ gn ]
+  )
   ++ lib.optionals stdenv.hostPlatform.isDarwin [
     bootstrap_cmds
     cctools
