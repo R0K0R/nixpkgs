@@ -157,6 +157,10 @@ stdenv.mkDerivation (finalAttrs: {
     export DARWIN_LDFLAGS_SO_PREFIX=$out/lib/
   '';
 
+  # GCC 15 defaults -Wdeclaration-after-statement to an error for C sources
+  # using this pattern; downgrade back to a warning.
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=declaration-after-statement";
+
   configureFlags = [
     "CFLAGS=-std=gnu17"
     "--with-system-libtiff"
