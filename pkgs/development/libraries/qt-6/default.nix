@@ -16,6 +16,7 @@
   apple-sdk_15,
   darwinMinVersionHook,
   buildPackages,
+  pkgsBuildBuild,
   python3,
   config,
 }:
@@ -59,7 +60,7 @@ let
       inherit callPackage srcs darwinVersionInputs;
 
       qtModule = callPackage ./qtModule.nix {
-        inherit darwinVersionInputs;
+        inherit darwinVersionInputs pkgsBuildBuild;
       };
 
       qtbase = callPackage ./modules/qtbase {
