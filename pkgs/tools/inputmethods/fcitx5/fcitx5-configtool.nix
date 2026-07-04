@@ -27,7 +27,24 @@
   plasma-framework ? null,
   wrapQtAppsHook,
   kcmSupport ? true,
+  pkgsBuildBuild,
 }:
+
+let
+  # Reliable cross-or-pseudo-cross detection (see mk-kde-derivation.nix).
+  isCrossOrPseudo =
+    (stdenv.isIntraISACross or false) || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+  # KCMUtils' own cmake config checks `CMAKE_CROSSCOMPILING AND KF6_HOST_TOOLING`
+  # to swap in BUILD-platform tool targets for its kcmutils_add_plugin() codegen
+  # step, rather than running a HOST-linked `*-desktop-gen` binary that SIGILLs
+  # on the BUILD machine. mkKdeDerivation wires this automatically for KDE-native
+  # packages via a shared kf6HostTooling dir; this package is plain
+  # stdenv.mkDerivation so it needs its own copy of the same fix.
+  kf6HostTooling = pkgsBuildBuild.runCommand "fcitx5-configtool-host-tooling" { } ''
+    mkdir -p "$out"
+    ln -s "${pkgsBuildBuild.kdePackages.kcmutils.dev}/lib/cmake/KF6KCMUtils" "$out/KF6KCMUtils"
+  '';
+in
 
 stdenv.mkDerivation rec {
   pname = "fcitx5-configtool";
@@ -43,6 +60,9 @@ stdenv.mkDerivation rec {
   cmakeFlags = [
     (lib.cmakeBool "KDE_INSTALL_USE_QT_SYS_PATHS" true)
     (lib.cmakeBool "ENABLE_KCM" kcmSupport)
+  ]
+  ++ lib.optionals (isCrossOrPseudo && kcmSupport && lib.versions.major qtbase.version == "6") [
+    "-DKF6_HOST_TOOLING=${kf6HostTooling}"
   ];
 
   nativeBuildInputs = [
