@@ -781,6 +781,9 @@ let
                 ) (defaultHardeningFlags ++ hardeningEnable)
             );
 
+          # Expose isIntraISACross to setup.sh so hooks can read it at shell level.
+          ${if stdenv.isIntraISACross or false then "NIX_IS_INTRA_ISA_CROSS" else null} = "1";
+
           # TODO: remove platform condition
           # Enabling this check could be a breaking change as it requires to edit nix.conf
           # NixOS module already sets gccarch, unsure of nix installers and other distributions
