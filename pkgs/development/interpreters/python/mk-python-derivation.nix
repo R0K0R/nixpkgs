@@ -419,7 +419,13 @@ lib.extendMkDerivation {
         + attrs.postFixup or "";
 
       # Python packages built through cross-compilation are always for the host platform.
-      disallowedReferences = optionals (python.stdenv.hostPlatform != python.stdenv.buildPlatform) [
+      # In intra-ISA cross builds, BUILD and HOST python share the same config
+      # string (same ABI), so a reference to pythonOnBuildForHost in the
+      # output is harmless; skip the check in that case.
+      disallowedReferences = optionals (
+        python.stdenv.hostPlatform != python.stdenv.buildPlatform
+        && !(python.stdenv.isIntraISACross or false)
+      ) [
         python.pythonOnBuildForHost
       ];
 
