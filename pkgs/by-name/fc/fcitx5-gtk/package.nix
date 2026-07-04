@@ -46,7 +46,12 @@ stdenv.mkDerivation rec {
     "-DGOBJECT_INTROSPECTION_GIRDIR=share/gir-1.0"
     "-DGOBJECT_INTROSPECTION_TYPELIBDIR=lib/girepository-1.0"
   ]
-  ++ lib.optional (!withGTK2) "-DENABLE_GTK2_IM_MODULE=off";
+  ++ lib.optional (!withGTK2) "-DENABLE_GTK2_IM_MODULE=off"
+  # The GIR scanner works by compiling and executing a small probe binary
+  # linked against the library being introspected. In a cross build, that
+  # probe is a HOST binary and may not be executable on the build machine,
+  # so disable introspection instead of failing partway through configure.
+  ++ lib.optional (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) "-DENABLE_GIR=OFF";
 
   buildInputs = [
     glib
