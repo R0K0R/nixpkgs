@@ -19,6 +19,14 @@
       [ "sse2-i32x4" ],
 }:
 
+# In cross builds, the HOST cc-wrapper only exposes a prefixed clang++
+# (e.g. x86_64-unknown-linux-gnu-clang++), not a plain clang++. cmake's
+# CLANGPP_EXECUTABLE path must exist regardless; use the unwrapped clang.cc,
+# which has plain clang/clang++ binaries irrespective of any cross prefix.
+let
+  clangBin = llvmPackages.clang.cc;
+in
+
 stdenv.mkDerivation (finalAttrs: {
   pname = "ispc";
   version = "1.31.0";
@@ -83,8 +91,8 @@ stdenv.mkDerivation (finalAttrs: {
     (lib.cmakeFeature "FILE_CHECK_EXECUTABLE" "${llvmPackages.llvm}/bin/FileCheck")
     (lib.cmakeFeature "LLVM_AS_EXECUTABLE" "${llvmPackages.llvm}/bin/llvm-as")
     (lib.cmakeFeature "LLVM_CONFIG_EXECUTABLE" "${llvmPackages.llvm.dev}/bin/llvm-config")
-    (lib.cmakeFeature "CLANG_EXECUTABLE" "${llvmPackages.clang}/bin/clang")
-    (lib.cmakeFeature "CLANGPP_EXECUTABLE" "${llvmPackages.clang}/bin/clang++")
+    (lib.cmakeFeature "CLANG_EXECUTABLE" "${clangBin}/bin/clang")
+    (lib.cmakeFeature "CLANGPP_EXECUTABLE" "${clangBin}/bin/clang++")
     (lib.cmakeBool "ISPC_INCLUDE_EXAMPLES" false)
     (lib.cmakeBool "ISPC_INCLUDE_UTILS" false)
     (lib.cmakeFeature "ARM_ENABLED=" (
