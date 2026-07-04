@@ -85,6 +85,19 @@ stdenv.mkDerivation {
       echo $pkg-config > $out/nix-support/orig-pkg-config
 
       wrap ${wrapperBinName} ${./pkg-config-wrapper.sh} "${getBin pkg-config}/bin/${baseBinName}"
+
+      ${optionalString (targetPrefix != "" && targetPlatform.config == hostPlatform.config) ''
+        # Intra-ISA cross (targetPlatform.config == hostPlatform.config, e.g.
+        # differing only in gcc.arch): the cross pkg-config wrapper installs
+        # only the prefixed name. Build systems (qmake sub-makes, autoconf,
+        # node-gyp) that use config-string comparison to detect native/cross
+        # call bare `pkg-config` assuming a native build. Provide a plain-name
+        # alias pointing at the HOST wrapper; same-ABI rationale as the
+        # existing bintools-wrapper/cc-wrapper plain-name symlinks.
+        if [ ! -e "$out/bin/${baseBinName}" ]; then
+          ln -s "${wrapperBinName}" "$out/bin/${baseBinName}"
+        fi
+      ''}
     ''
     # symlink in share for autoconf to find macros
 
