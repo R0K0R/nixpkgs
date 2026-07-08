@@ -59,7 +59,21 @@ lib.throwIf (attrs ? name)
           buildInputs = buildInputs ++ [ perl ];
           nativeBuildInputs =
             nativeBuildInputs
-            ++ (if !(stdenv.buildPlatform.canExecute stdenv.hostPlatform) then [ perl.mini ] else [ perl ]);
+            # Miniperl (a bootstrap perl without dynamic loading) is only needed
+            # when the build platform genuinely cannot execute host binaries. In
+            # intra-ISA cross (same config string, different gcc.arch) canExecute
+            # is false purely because of the microarch mismatch, but a fully
+            # functional perl is still usable -- and miniperl's inability to load
+            # XS core modules (IO, Fcntl, ...) breaks any package whose
+            # Makefile.PL or build-time helper scripts need them (observed:
+            # Lingua-Translit's substitute_tables.pl, List-MoreUtils-XS's
+            # inc/latest.pm, both via "Can't load module IO").
+            ++ (
+              if !(stdenv.buildPlatform.canExecute stdenv.hostPlatform) && !(stdenv.isIntraISACross or false) then
+                [ perl.mini ]
+              else
+                [ perl ]
+            );
 
           inherit
             outputs
