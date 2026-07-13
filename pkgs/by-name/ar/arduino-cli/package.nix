@@ -68,7 +68,13 @@ let
       "-X github.com/arduino/arduino-cli/internal/version.versionString=${finalAttrs.version}"
       "-X github.com/arduino/arduino-cli/internal/version.commit=unknown"
     ]
-    ++ lib.optionals stdenv.hostPlatform.isLinux [ "-extldflags '-static'" ];
+    # Static linking needs the C library's static archives, which aren't
+    # wired into cross builds -- the link fails with missing static library
+    # inputs. Keep the fully-static binary for native builds (unchanged
+    # upstream behavior); link dynamically when cross compiling.
+    ++ lib.optionals (
+      stdenv.hostPlatform.isLinux && stdenv.buildPlatform == stdenv.hostPlatform
+    ) [ "-extldflags '-static'" ];
 
     postInstall = ''
       wrapProgram $out/bin/arduino-cli --prefix PATH : ${lib.makeBinPath [ python3 ]}
