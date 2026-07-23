@@ -57,8 +57,18 @@ let
 
   appleSdk = if langAda && !is13 then apple-sdk_15 else apple-sdk_14;
 
-  # See https://github.com/NixOS/nixpkgs/pull/209870#issuecomment-1500550903
-  disableBootstrap' = disableBootstrap && !langFortran && !langGo;
+  # See https://github.com/NixOS/nixpkgs/pull/209870#issuecomment-1500550903 --
+  # langFortran/langGo are exempted from --disable-bootstrap. That exemption is
+  # only correct for a *genuine* cross build. Under an intra-ISA / pseudo-cross
+  # toolchain (hostPlatform.config == targetPlatform.config, but the platforms
+  # differ e.g. in gcc.arch, so hostIsTarget is false and disableBootstrap
+  # defaults true), the forced bootstrap runs a stage2 sub-configure that
+  # inherits a PATH where the depsBuildBuild gcc shadows the cross wrapper,
+  # breaking the build. When the configs match, honour disableBootstrap for
+  # fortran/go like every other language.
+  disableBootstrap' =
+    disableBootstrap
+    && (hostPlatform.config == targetPlatform.config || (!langFortran && !langGo));
 
   crossMingw = !hostIsTarget && targetPlatform.isMinGW;
   crossDarwin = !hostIsTarget && targetPlatform.libc == "libSystem";
