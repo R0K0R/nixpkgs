@@ -473,7 +473,35 @@ stdenvNoCC.mkDerivation {
     src=$PWD
   '';
 
-  wrapper = ./cc-wrapper.sh;
+  /*
+    cc-wrapper.sh, with the -march/-mcpu/-mtune dedup spliced in only for
+    stdenvs that actually inject an ambient -march.
+
+    substituteAll copies this script verbatim into every cc-wrapper, so editing
+    cc-wrapper.sh itself changes every wrapper hash -> every compiled package ->
+    the whole tree, forcing a rebuild and costing binary-cache substitutability.
+    The dedup is a no-op without an ambient -march (an untuned stdenv has none),
+    so on those configurations it is pure dead weight. Splicing keeps the file
+    pristine and makes the patch a no-op for every existing untuned setup.
+
+    Uses eval-time replaceStrings rather than a runCommand or a build-time sed:
+    cc-wrapper is constructed during stdenv bootstrap, where depending on
+    another derivation to preprocess this file would be circular.
+  */
+  wrapper =
+    let
+      base = builtins.readFile ./cc-wrapper.sh;
+      anchor = "# Some build systems such as Bazel and SwiftPM";
+      patched = builtins.replaceStrings [ anchor ] [
+        (builtins.readFile ./intra-isa-march-dedup.sh + anchor)
+      ] base;
+    in
+    if (targetPlatform.gcc.arch or null) == null then
+      ./cc-wrapper.sh
+    else if patched == base then
+      throw "cc-wrapper: -march dedup splice found no anchor in cc-wrapper.sh"
+    else
+      builtins.toFile "cc-wrapper.sh" patched;
 
   installPhase = ''
     mkdir -p $out/bin $out/nix-support
