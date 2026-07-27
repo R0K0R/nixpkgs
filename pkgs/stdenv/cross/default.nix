@@ -66,8 +66,59 @@ lib.init bootStages
           cc = null;
           hasCC = false;
 
+          /*
+            Intra-ISA cross (hostPlatform.config == buildPlatform.config, but the
+            platforms differ -- e.g. only in gcc.arch): relax the strictDeps gate
+            in setup.sh's _addToEnv so HOST buildInputs' setup hooks still run.
+            The ABI hazards strictDeps guards against (wrong rpaths, wrong
+            sonames) cannot arise when BUILD and HOST share a config string, and
+            those hooks are what populate QMAKEPATH,
+            QT_ADDITIONAL_PACKAGES_PREFIX_PATH and friends. Binary executability
+            is NOT assumed: znver5 still cannot run meteorlake output.
+
+            Supplied through the stdenv's own `setupScript` parameter -- the
+            extension point `stdenvAdapters.overrideSetup` is built on -- rather
+            than by editing pkgs/stdenv/generic/setup.sh. That file is copied
+            verbatim into every derivation's stdenv, so a single edited byte
+            there changes every hash in the tree, including plain native builds
+            that can never reach this branch, and forfeits cache.nixos.org
+            substitutability for all of them. Splicing here confines the change
+            to stdenvs that actually are intra-ISA cross.
+          */
+          setupScript =
+            let
+              isIntraISACross = hostPlatform != buildPlatform && hostPlatform.config == buildPlatform.config;
+              baseScript = old.setupScript or ../generic/setup.sh;
+              anchor = ''            if [[ -z "''${strictDeps-}" ]]; then'';
+              replacement = ''            # Intra-ISA cross: run HOST buildInputs' setup hooks too. See the
+            # setupScript comment in pkgs/stdenv/cross/default.nix.
+            # NIX_IS_INTRA_ISA_CROSS is set by make-derivation.nix.
+            if [[ -z "''${strictDeps-}" || "''${NIX_IS_INTRA_ISA_CROSS-}" == "1" ]]; then'';
+              base = builtins.readFile baseScript;
+              patched = builtins.replaceStrings [ anchor ] [ replacement ] base;
+            in
+            if !isIntraISACross then
+              baseScript
+            else if patched == base then
+              throw "stdenv/cross: intra-ISA setup.sh splice found no anchor (upstream reformat?)"
+            else
+              builtins.toFile "setup.sh" patched;
+
           extraNativeBuildInputs =
             old.extraNativeBuildInputs
+            # Intra-ISA cross cmake fixes. Kept out of cmake's own setup-hook.sh
+            # because cmake is a nativeBuildInput -- the cmake executing during a
+            # cross build is the BUILD-platform one, so the fixes cannot be gated
+            # on cmake's own platform. Editing its setup-hook.sh instead would be
+            # unconditional and change the hash of every cmake-built package on
+            # native builds too, costing cache.nixos.org substitutability for all
+            # of them. Same injection mechanism as patchelf below.
+            ++ lib.optional (hostPlatform != buildPlatform && hostPlatform.config == buildPlatform.config) (
+              buildPackages.makeSetupHook {
+                name = "cmake-intra-isa-cross-hook";
+                meta.license = lib.licenses.mit;
+              } ../../build-support/setup-hooks/cmake-intra-isa-cross.sh
+            )
             ++ lib.optionals (hostPlatform.isLinux && !buildPlatform.isLinux) [ buildPackages.patchelf ]
             ++ lib.optional (
               let

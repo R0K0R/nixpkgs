@@ -504,7 +504,51 @@ stdenvNoCC.mkDerivation {
       src=$PWD
     '';
 
-  wrapper = ./cc-wrapper.sh;
+  /*
+    cc-wrapper.sh, with intra-ISA-cross additions spliced in ONLY where needed.
+
+    substituteAll copies this script verbatim into every cc-wrapper, so any edit
+    to cc-wrapper.sh itself changes every wrapper hash -> every compiled package
+    -> the whole tree diverges from cache.nixos.org. Measured: the fork's edits
+    to this file and add-flags.sh were enough to make plain native `hello`
+    absent from the binary cache while upstream's was present, with no gcc.arch
+    involved at all. Splicing here keeps the file pristine, so untuned/native
+    derivations stay byte-identical to upstream and remain substitutable, while
+    tuned/cross wrappers -- which were never cacheable anyway -- get the blocks.
+
+    Done with eval-time replaceStrings rather than a runCommand or a build-time
+    sed: cc-wrapper is constructed during stdenv bootstrap, where depending on
+    another derivation to preprocess this file risks recursion.
+
+    Both blocks are inserted BEFORE their anchor lines, each verified unique in
+    the pristine file. replaceStrings is literal, so no regex escaping.
+  */
+  wrapper =
+    let
+      base = builtins.readFile ./cc-wrapper.sh;
+
+      # -march dedup: only meaningful when an ambient -march/-mcpu/-mtune is
+      # injected, i.e. a gcc.arch-tuned stdenv. No-op otherwise.
+      marchAnchor = "# Some build systems such as Bazel and SwiftPM";
+      needsMarchDedup = (targetPlatform.gcc.arch or null) != null;
+
+      # NIX_CXXFLAGS_COMPILE_BEFORE consumer: only qtbase sets that variable,
+      # and only under isCrossBuild || isIntraISACross.
+      cxxAnchor = ''if [ "$dontLink" != 1 ]; then'';
+      needsCxxBefore = targetPrefix != "";
+
+      splice =
+        cond: anchor: blockFile: text:
+        if cond then
+          builtins.replaceStrings [ anchor ] [ (builtins.readFile blockFile + anchor) ] text
+        else
+          text;
+
+      patched = splice needsCxxBefore cxxAnchor ./intra-isa-cxxflags-before.sh (
+        splice needsMarchDedup marchAnchor ./intra-isa-march-dedup.sh base
+      );
+    in
+    if patched == base then ./cc-wrapper.sh else builtins.toFile "cc-wrapper.sh" patched;
 
   installPhase = ''
     mkdir -p $out/bin $out/nix-support
@@ -986,6 +1030,30 @@ stdenvNoCC.mkDerivation {
       substituteAll ${./add-hardening.sh} $out/nix-support/add-hardening.sh
       substituteAll ${../wrapper-common/utils.bash} $out/nix-support/utils.bash
       substituteAll ${../wrapper-common/darwin-sdk-setup.bash} $out/nix-support/darwin-sdk-setup.bash
+    ''
+
+    # NIX_CXXFLAGS_COMPILE_BEFORE: a C++-only counterpart to
+    # NIX_CFLAGS_COMPILE_BEFORE, consumed in cc-wrapper.sh. Its only setter is
+    # qtbase, which gates on `isCrossBuild || stdenv.isIntraISACross`, so the
+    # variable is never set on a native build.
+    #
+    # Injected here rather than added to add-flags.sh directly so that
+    # add-flags.sh stays BYTE-IDENTICAL to upstream for native builds.
+    # substituteAll copies that file verbatim into every cc-wrapper, so a single
+    # extra line in it changes every wrapper hash -> every compiled package ->
+    # the entire tree diverges from cache.nixos.org. Measured: that one line
+    # alone was enough to make plain native `hello` absent from the binary cache
+    # while upstream's was present. Keeping the file pristine restores native
+    # substitutability; the cross case rewrites it in place, where nothing was
+    # cacheable anyway.
+    #
+    # Anchored on the line-terminated bare name: NIX_CFLAGS_COMPILE_BEFORE also
+    # appears suffix-salted elsewhere in the file, and only the var_templates_list
+    # entry sits alone on its line.
+    + optionalString (targetPrefix != "") ''
+      sed -i 's/^\([[:space:]]*\)NIX_CFLAGS_COMPILE_BEFORE$/\1NIX_CFLAGS_COMPILE_BEFORE\n\1NIX_CXXFLAGS_COMPILE_BEFORE/' \
+        $out/nix-support/add-flags.sh
+      grep -q 'NIX_CXXFLAGS_COMPILE_BEFORE' $out/nix-support/add-flags.sh
     ''
 
     + optionalString cc.langAda or false ''
