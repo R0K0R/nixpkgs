@@ -285,7 +285,11 @@ stdenvNoCC.mkDerivation {
       # calls the prefixed ld (it detects cross via different config strings), and
       # plain `ld` in PATH must remain BUILD ld.  Generalizing to all cross would
       # shadow BUILD bintools with HOST bintools for any bare-name call.
-      for binary in objdump objcopy nm strip ar ranlib as size strings readelf \
+      # strip is handled separately below: it isn't wrapped until the GNU
+      # extra-strip-flags section further down, so at this point in the
+      # script "$out/bin/${targetPrefix}strip" doesn't exist yet and this
+      # loop's -e check would silently never fire for it.
+      for binary in objdump objcopy nm ar ranlib as size strings readelf \
                     addr2line c++filt gprof dwp elfedit; do
         if [ -e "$out/bin/${targetPrefix}''${binary}${exeSuffix}" ]; then
           ln -sf "${targetPrefix}''${binary}${exeSuffix}" "$out/bin/''${binary}${exeSuffix}"
@@ -429,6 +433,16 @@ stdenvNoCC.mkDerivation {
           wrap ${targetPrefix}strip ${./gnu-binutils-strip-wrapper.sh} \
             "${bintools_bin}/bin/${targetPrefix}strip"
         ''
+
+    # Intra-ISA cross bare-name symlink for strip -- see the comment above the
+    # objdump/objcopy/nm/... loop earlier in this file. strip is wrapped only
+    # here (above), after that loop already ran, so it needs its own
+    # bare-name symlink once the wrapped binary actually exists.
+    + optionalString (targetPrefix != "" && targetPlatform.config == stdenvNoCC.hostPlatform.config) ''
+      if [ -e "$out/bin/${targetPrefix}strip${exeSuffix}" ]; then
+        ln -sf "${targetPrefix}strip${exeSuffix}" "$out/bin/strip${exeSuffix}"
+      fi
+    ''
 
     ###
     ### Remove certain timestamps from final binaries
