@@ -473,7 +473,36 @@ stdenvNoCC.mkDerivation {
     src=$PWD
   '';
 
-  wrapper = ./cc-wrapper.sh;
+  /*
+    cc-wrapper.sh, with the C++-only *_BEFORE handling spliced in for cross
+    wrappers only.
+
+    substituteAll copies this script verbatim into every cc-wrapper, so editing
+    cc-wrapper.sh itself changes every wrapper hash -> every compiled package ->
+    the whole tree, forcing a rebuild and costing binary-cache substitutability
+    even for plain native builds. NIX_CXXFLAGS_COMPILE_BEFORE is only ever set
+    by cross-aware packages, so the consumer is dead weight on a native wrapper.
+    Splicing keeps the file pristine and the patch a no-op for every existing
+    non-cross configuration.
+
+    Uses eval-time replaceStrings rather than a runCommand or a build-time sed:
+    cc-wrapper is constructed during stdenv bootstrap, where depending on
+    another derivation to preprocess this file would be circular.
+  */
+  wrapper =
+    let
+      base = builtins.readFile ./cc-wrapper.sh;
+      anchor = ''if [ "$dontLink" != 1 ]; then'';
+      patched = builtins.replaceStrings [ anchor ] [
+        (builtins.readFile ./intra-isa-cxxflags-before.sh + anchor)
+      ] base;
+    in
+    if targetPrefix == "" then
+      ./cc-wrapper.sh
+    else if patched == base then
+      throw "cc-wrapper: NIX_CXXFLAGS_COMPILE_BEFORE splice found no anchor in cc-wrapper.sh"
+    else
+      builtins.toFile "cc-wrapper.sh" patched;
 
   installPhase = ''
     mkdir -p $out/bin $out/nix-support
@@ -935,6 +964,21 @@ stdenvNoCC.mkDerivation {
       substituteAll ${./add-hardening.sh} $out/nix-support/add-hardening.sh
       substituteAll ${../wrapper-common/utils.bash} $out/nix-support/utils.bash
       substituteAll ${../wrapper-common/darwin-sdk-setup.bash} $out/nix-support/darwin-sdk-setup.bash
+    ''
+
+    # Register NIX_CXXFLAGS_COMPILE_BEFORE for role-suffix mangling. Injected
+    # here rather than added to add-flags.sh directly so that file stays
+    # byte-identical to an unpatched tree for native wrappers -- it is copied
+    # verbatim into every cc-wrapper, so one extra line in it changes every
+    # wrapper hash and every package built with them. Anchored on the
+    # line-terminated bare name: NIX_CFLAGS_COMPILE_BEFORE also appears
+    # suffix-salted elsewhere in the file, and only the var_templates_list entry
+    # sits alone on its line. The grep asserts the sed actually matched, so a
+    # future reformat fails loudly instead of silently dropping the feature.
+    + optionalString (targetPrefix != "") ''
+      sed -i 's/^\([[:space:]]*\)NIX_CFLAGS_COMPILE_BEFORE$/\1NIX_CFLAGS_COMPILE_BEFORE\n\1NIX_CXXFLAGS_COMPILE_BEFORE/' \
+        $out/nix-support/add-flags.sh
+      grep -q 'NIX_CXXFLAGS_COMPILE_BEFORE' $out/nix-support/add-flags.sh
     ''
 
     + optionalString cc.langAda or false ''
