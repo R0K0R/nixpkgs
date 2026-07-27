@@ -118,7 +118,34 @@ stdenv.mkDerivation {
             ;
         };
         meta.license = lib.licenses.mit;
-      } ./setup-hook.sh;
+      }
+        (
+          # setup-hook.sh is copied verbatim into every pkg-config-wrapper, so
+          # editing it changes every wrapper hash -- and every package built with
+          # one -- including native builds, where NIX_IS_INTRA_ISA_CROSS is never
+          # set and the added branch can never be taken. Splice the relaxation in
+          # only for intra-ISA cross wrappers so the file stays byte-identical to
+          # an unpatched tree everywhere else.
+          let
+            isIntraISACross = targetPrefix != "" && targetPlatform.config == hostPlatform.config;
+            anchor = ''[[ -z ''${strictDeps-} ]] || (( "$hostOffset" < 0 )) || return 0'';
+            replacement = ''
+              # Intra-ISA cross: HOST setup hooks run via the relaxed _addToEnv in
+              # setup.sh, but $hostOffset is unset in that call context so
+              # (( "$hostOffset" < 0 )) is false. Let HOST pkgconfig dirs reach
+              # PKG_CONFIG_PATH so the HOST wrapper's add-flags.sh can copy them
+              # into PKG_CONFIG_PATH_<salt> at invocation time.
+              [[ -z ''${strictDeps-} ]] || (( "$hostOffset" < 0 )) || [[ "''${NIX_IS_INTRA_ISA_CROSS-}" == "1" ]] || return 0'';
+            base = builtins.readFile ./setup-hook.sh;
+            patched = builtins.replaceStrings [ anchor ] [ replacement ] base;
+          in
+          if !isIntraISACross then
+            ./setup-hook.sh
+          else if patched == base then
+            throw "pkg-config-wrapper: intra-ISA splice found no anchor in setup-hook.sh"
+          else
+            builtins.toFile "setup-hook.sh" patched
+        );
     in
     [
       "${roleHook}/nix-support/setup-hook"
