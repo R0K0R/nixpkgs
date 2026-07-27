@@ -101,68 +101,6 @@ cmakeConfigurePhase() {
     local flagsArray=()
     concatTo flagsArray cmakeFlags cmakeFlagsArray
 
-    # Forward every -D flag from this configure invocation into a
-    # CMAKE_PROJECT_INCLUDE preload file, as forced CACHE entries, so that
-    # ExternalProject_Add/FetchContent sub-builds (which run their own
-    # separate cmake configure, ignoring most of the outer flagsArray) still
-    # inherit compiler/toolchain/cross settings from the outer invocation
-    # instead of silently re-detecting (and potentially getting wrong) their
-    # own. Toolchain/install-path variables are excluded since they're either
-    # sub-build-specific (install dirs) or would create a self-reference
-    # (CMAKE_PROJECT_INCLUDE itself).
-    local _nixpkgsPreload="$TMPDIR/nixpkgs-cmake-preload.cmake"
-    : > "$_nixpkgsPreload"
-    local _f _k _v
-    for _f in "${flagsArray[@]}"; do
-        case "$_f" in
-            -D*=*)
-                _k="${_f#-D}"; _k="${_k%%=*}"
-                _v="${_f#-D*=}"
-                case "$_k" in
-                    CMAKE_PROJECT_INCLUDE|\
-                    CMAKE_C_COMPILER|CMAKE_CXX_COMPILER|\
-                    CMAKE_AR|CMAKE_RANLIB|CMAKE_STRIP|\
-                    CMAKE_INSTALL_PREFIX|CMAKE_INSTALL_NAME_DIR|\
-                    CMAKE_INSTALL_BINDIR|CMAKE_INSTALL_SBINDIR|\
-                    CMAKE_INSTALL_INCLUDEDIR|CMAKE_INSTALL_MANDIR|\
-                    CMAKE_INSTALL_INFODIR|CMAKE_INSTALL_DOCDIR|\
-                    CMAKE_INSTALL_LIBDIR|CMAKE_INSTALL_LIBEXECDIR|\
-                    CMAKE_INSTALL_LOCALEDIR|\
-                    CMAKE_FIND_USE_PACKAGE_REGISTRY|\
-                    CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY|\
-                    CMAKE_EXPORT_NO_PACKAGE_REGISTRY|\
-                    CMAKE_BUILD_TYPE|BUILD_TESTING)
-                        : ;;
-                    *)
-                        printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
-                        ;;
-                esac
-                ;;
-        esac
-    done
-    # cmakeTryRunCacheVars lets a package statically answer specific
-    # try_run()/check_c_source_runs() probes (as "VAR=value" entries) instead
-    # of letting cmake actually compile-and-execute the check. This matters
-    # in cross builds, where try_run() would otherwise attempt to execute a
-    # HOST-compiled binary on the BUILD machine, which fails outright when
-    # the two aren't executable-compatible. A package can also drop a
-    # cmake-try-run-cache.cmake file directly into its build dir for
-    # answers that don't fit the simple VAR=value form.
-    if [ -n "${cmakeTryRunCacheVars-}" ]; then
-        local _e
-        for _e in $cmakeTryRunCacheVars; do
-            _k="${_e%%=*}"; _v="${_e#*=}"
-            printf 'set(%s "%s" CACHE STRING "" FORCE)\n' "$_k" "$_v" >> "$_nixpkgsPreload"
-        done
-    fi
-    if [ -f "${cmakeDir}/cmake-try-run-cache.cmake" ]; then
-        cat "${cmakeDir}/cmake-try-run-cache.cmake" >> "$_nixpkgsPreload"
-    fi
-
-    if [ -s "$_nixpkgsPreload" ]; then
-        flagsArray=("-DCMAKE_PROJECT_INCLUDE=$_nixpkgsPreload" "${flagsArray[@]}")
-    fi
-
     echoCmd 'cmake flags' "${flagsArray[@]}"
 
     cmake "$cmakeDir" "${flagsArray[@]}"
@@ -180,22 +118,6 @@ cmakeConfigurePhase() {
         echo "cmake: enabled parallel installing"
     fi
 
-    # Strip the redundant glibc -isystem cmake's cross-compiler probe injects.
-    # cmake runs `$CXX -v -E /dev/null`, extracts the implicit include dirs,
-    # and re-emits them as explicit -isystem flags in the generated build
-    # files. In intra-ISA cross builds, the glibc-dev include this produces
-    # lands before the C++ stdlib headers, which breaks #include_next
-    # <stdlib.h> inside GCC's <cstdlib> (and similarly for other C headers
-    # wrapped by the C++ stdlib). The cross-compiler wrapper already injects
-    # the correct include order via NIX_CFLAGS_COMPILE, so cmake's own
-    # -isystem here is both redundant and actively harmful. Covers both
-    # generators: Ninja (*.ninja) and Unix Makefiles (CMakeFiles/**/flags.make).
-    if [[ "${NIX_IS_INTRA_ISA_CROSS-}" == "1" ]]; then
-        find . \( -name '*.ninja' -o -name 'flags.make' \) \
-            | xargs -r sed -Ei \
-                's| -isystem /nix/store/[a-z0-9]{32}-glibc-[^ ]*/include||g'
-    fi
-
     runHook postConfigure
 }
 
@@ -205,17 +127,6 @@ if [ -z "${dontUseCmakeConfigure-}" -a -z "${configurePhase-}" ]; then
 fi
 
 addEnvHooks "$targetOffset" addCMakeParams
-
-# addCMakeParams above fires at $targetOffset (HOST buildInputs), so
-# find_package() finds HOST libraries' cmake configs but not those from
-# nativeBuildInputs (e.g. ECM, wayland-scanner). Populate the same variable
-# from nativeBuildInputs (depsBuildHost = $hostOffset) so find_package() also
-# resolves build-time tools' cmake configs. Complements addCMakeProgramPath
-# (find_program) and addCMakeParams (find_package, HOST side) above.
-addCMakeNativePrefixPath() {
-    addToSearchPath NIXPKGS_CMAKE_PREFIX_PATH "$1"
-}
-addEnvHooks "$hostOffset" addCMakeNativePrefixPath
 
 makeCmakeFindLibs() {
     isystem_seen=
@@ -254,30 +165,3 @@ makeCmakeFindLibs() {
 # not using setupHook, because it could be a setupHook adding additional
 # include flags to NIX_CFLAGS_COMPILE
 postHooks+=(makeCmakeFindLibs)
-
-# Read cmake-cross-helper-flags from a dependency's nix-support and prepend
-# each line to cmakeFlags. This lets a package (typically one that itself
-# needed some cross-build-specific cmake variable, such as a BUILD-platform
-# tool directory) write flags into a well-known nix-support file, and have
-# every downstream consumer automatically forward those flags into its own
-# cmake invocation, without every consumer needing to know the flag itself.
-addCMakeCrossHelperFlags() {
-    local _pkg="$1"
-    if [ -f "$_pkg/nix-support/cmake-cross-helper-flags" ]; then
-        local _flag
-        while IFS= read -r _flag || [ -n "$_flag" ]; do
-            if [ -n "$_flag" ]; then prependToVar cmakeFlags "$_flag"; fi
-        done < "$_pkg/nix-support/cmake-cross-helper-flags"
-    fi
-}
-addEnvHooks "$hostOffset" addCMakeCrossHelperFlags
-
-# Populate CMAKE_PROGRAM_PATH from nativeBuildInputs' bin/ dirs. cmake's
-# find_program() searches PATH and CMAKE_PROGRAM_PATH but not
-# NIXPKGS_CMAKE_PREFIX_PATH, so without this, find_program(TOOL) returns
-# NOTFOUND even when TOOL is present as a nativeBuildInput, unless it also
-# happens to be on PATH.
-addCMakeProgramPath() {
-    if [ -d "$1/bin" ]; then addToSearchPath CMAKE_PROGRAM_PATH "$1/bin"; fi
-}
-addEnvHooks "$targetOffset" addCMakeProgramPath

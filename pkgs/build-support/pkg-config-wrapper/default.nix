@@ -85,19 +85,23 @@ stdenv.mkDerivation {
       echo $pkg-config > $out/nix-support/orig-pkg-config
 
       wrap ${wrapperBinName} ${./pkg-config-wrapper.sh} "${getBin pkg-config}/bin/${baseBinName}"
-
-      ${optionalString (targetPrefix != "" && targetPlatform.config == hostPlatform.config) ''
-        # Intra-ISA cross (targetPlatform.config == hostPlatform.config, e.g.
-        # differing only in gcc.arch): the cross pkg-config wrapper installs
-        # only the prefixed name. Build systems (qmake sub-makes, autoconf,
-        # node-gyp) that use config-string comparison to detect native/cross
-        # call bare `pkg-config` assuming a native build. Provide a plain-name
-        # alias pointing at the HOST wrapper; same-ABI rationale as the
-        # existing bintools-wrapper/cc-wrapper plain-name symlinks.
-        if [ ! -e "$out/bin/${baseBinName}" ]; then
-          ln -s "${wrapperBinName}" "$out/bin/${baseBinName}"
-        fi
-      ''}
+    ''
+    # Nix-level `+ optionalString`, NOT `${optionalString ...}` inside the string
+    # above: interpolating there leaves the blank line and the interpolation's
+    # indentation in the builder even when false, changing this wrapper's hash --
+    # and every package built with it -- on native builds that can never take the
+    # branch. Concatenation contributes exactly "" instead.
+    + optionalString (targetPrefix != "" && targetPlatform.config == hostPlatform.config) ''
+      # Intra-ISA cross (targetPlatform.config == hostPlatform.config, e.g.
+      # differing only in gcc.arch): the cross pkg-config wrapper installs
+      # only the prefixed name. Build systems (qmake sub-makes, autoconf,
+      # node-gyp) that use config-string comparison to detect native/cross
+      # call bare `pkg-config` assuming a native build. Provide a plain-name
+      # alias pointing at the HOST wrapper; same-ABI rationale as the
+      # existing bintools-wrapper/cc-wrapper plain-name symlinks.
+      if [ ! -e "$out/bin/${baseBinName}" ]; then
+        ln -s "${wrapperBinName}" "$out/bin/${baseBinName}"
+      fi
     ''
     # symlink in share for autoconf to find macros
 
@@ -131,7 +135,33 @@ stdenv.mkDerivation {
             ;
         };
         meta.license = lib.licenses.mit;
-      } ./setup-hook.sh;
+      }
+        (
+          # setup-hook.sh is copied verbatim into every pkg-config-wrapper, so
+          # editing the file itself changes every wrapper hash and thus every
+          # package built with it -- including native builds that can never take
+          # the new branch. Splice the intra-ISA relaxation in only where it
+          # applies, leaving the file byte-identical to upstream otherwise.
+          let
+            isIntraISACross = targetPrefix != "" && targetPlatform.config == hostPlatform.config;
+            anchor = ''[[ -z ''${strictDeps-} ]] || (( "$hostOffset" < 0 )) || return 0'';
+            replacement = ''
+              # Intra-ISA cross: HOST setup hooks run via the relaxed _addToEnv in
+              # setup.sh, but $hostOffset is unset in that call context so
+              # (( "$hostOffset" < 0 )) is false. Let HOST pkgconfig dirs reach
+              # PKG_CONFIG_PATH so the HOST wrapper's add-flags.sh can copy them
+              # into PKG_CONFIG_PATH_<salt> at invocation time.
+              [[ -z ''${strictDeps-} ]] || (( "$hostOffset" < 0 )) || [[ "''${NIX_IS_INTRA_ISA_CROSS-}" == "1" ]] || return 0'';
+            base = builtins.readFile ./setup-hook.sh;
+            patched = builtins.replaceStrings [ anchor ] [ replacement ] base;
+          in
+          if !isIntraISACross then
+            ./setup-hook.sh
+          else if patched == base then
+            throw "pkg-config-wrapper: intra-ISA splice found no anchor in setup-hook.sh"
+          else
+            builtins.toFile "setup-hook.sh" patched
+        );
     in
     [
       "${roleHook}/nix-support/setup-hook"
