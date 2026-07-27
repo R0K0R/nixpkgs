@@ -271,8 +271,15 @@ stdenvNoCC.mkDerivation {
       basename=$(basename "${if exeSuffix != "" then "\${variant%${exeSuffix}}" else "$variant"}")
       wrap $basename ${./ld-wrapper.sh} $variant
     done
-
-    ${optionalString (targetPrefix != "" && targetPlatform.config == stdenvNoCC.hostPlatform.config) ''
+  ''
+  # Nix-level `+ optionalString`, not `${optionalString ...}` inside the string
+  # above: an interpolation there leaves the preceding blank line and its own
+  # indentation in the builder script even when the condition is false. That
+  # changes this wrapper's hash -- and so every package built with it -- for
+  # plain native builds that can never take the branch, needlessly forfeiting
+  # binary-cache substitutability for them. Concatenating at the Nix level
+  # contributes exactly "" instead, leaving non-cross output byte-identical.
+  + optionalString (targetPrefix != "" && targetPlatform.config == stdenvNoCC.hostPlatform.config) ''
       # Intra-ISA cross: targetPlatform.config == hostPlatform.config but gcc.arch
       # differs (e.g. x86_64-unknown-linux-gnu + meteorlake vs znver5).
       # The cross bintools wrapper installs only prefixed names.  Build systems
@@ -297,7 +304,6 @@ stdenvNoCC.mkDerivation {
       if [ -e "$out/bin/${targetPrefix}ld.bfd${exeSuffix}" ]; then
         ln -sf "${targetPrefix}ld.bfd${exeSuffix}" "$out/bin/ld.bfd${exeSuffix}"
       fi
-    ''}
   '';
 
   strictDeps = true;
