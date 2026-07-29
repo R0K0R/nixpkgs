@@ -95,13 +95,50 @@
             )
           } ]
         ''
-        + ''
-          [target."${stdenv.hostPlatform.rust.rustcTarget}"]
-          "linker" = "${stdenv.cc}/bin/${stdenv.cc.targetPrefix}cc"
-          "rustflags" = [ ${
-            lib.optionalString (!stdenv.hostPlatform.isx86_32) ''"-Cforce-frame-pointers=yes"''
-          } ]
-        '';
+        + (
+          let
+            # These hooks are phase-shifted one slot earlier (they live in
+            # nativeBuildInputs), so `targetPlatform` here is the platform the
+            # package is actually being built FOR, and `stdenv.cc` is the
+            # buildPlatform compiler -- see the same note in
+            # build-support/rust/lib/default.nix.
+            #
+            # The block above, which carries the correct target compiler, is
+            # emitted only when the two platforms differ by *config string*. On
+            # an intra-ISA cross -- same triple, differing only in e.g. gcc.arch
+            # -- the strings match, so it is skipped and this block becomes the
+            # only [target."..."] table. It must then supply the target
+            # compiler rather than the buildPlatform one, or cargo links
+            # hostPlatform code with the buildPlatform wrapper, which carries
+            # none of the hostPlatform's -L paths:
+            #
+            #   ld.bfd: cannot find -lpam: No such file or directory
+            #
+            # for a pam that is an ordinary buildInput.
+            #
+            # Both tables would be named identically in that case, so emitting
+            # the block above instead is not an option; the fix is to pick the
+            # right compiler here. Unchanged for native builds (the platforms
+            # are equal) and for ordinary cross (the config strings differ, so
+            # the block above is emitted and this one keeps describing the
+            # buildPlatform).
+            linkerCc =
+              if
+                stdenv.hostPlatform.rust.rustcTarget == stdenv.targetPlatform.rust.rustcTarget
+                && stdenv.hostPlatform != stdenv.targetPlatform
+              then
+                pkgsTargetTarget.stdenv.cc
+              else
+                stdenv.cc;
+          in
+          ''
+            [target."${stdenv.hostPlatform.rust.rustcTarget}"]
+            "linker" = "${linkerCc}/bin/${linkerCc.targetPrefix}cc"
+            "rustflags" = [ ${
+              lib.optionalString (!stdenv.hostPlatform.isx86_32) ''"-Cforce-frame-pointers=yes"''
+            } ]
+          ''
+        );
     };
 
     passthru.tests = {
