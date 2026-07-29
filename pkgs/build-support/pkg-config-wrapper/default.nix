@@ -35,8 +35,13 @@ let
   # default.
   targetPrefix = optionalString (targetPlatform != hostPlatform) (targetPlatform.config + "-");
 
-  # See description in cc-wrapper.
-  suffixSalt = replaceStrings [ "-" "." ] [ "_" "_" ] targetPlatform.config;
+  # See description in cc-wrapper. The gcc.arch term disambiguates two wrappers
+  # that share a triple but differ in microarchitecture (intra-ISA cross).
+  suffixSalt =
+    replaceStrings [ "-" "." ] [ "_" "_" ] targetPlatform.config
+    + optionalString ((targetPlatform.gcc.arch or "") != "") (
+      "_" + replaceStrings [ "-" "." ] [ "_" "_" ] targetPlatform.gcc.arch
+    );
 
   wrapperName = "PKG_CONFIG_WRAPPER";
   wrapperBinName = "${targetPrefix}${baseBinName}";
