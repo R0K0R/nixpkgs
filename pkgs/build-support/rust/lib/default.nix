@@ -57,12 +57,35 @@
       #
       setEnv = ''
         env \
-          "CC_${stdenv.buildPlatform.rust.cargoEnvVarTarget}=${ccForBuild}" \
-          "CXX_${stdenv.buildPlatform.rust.cargoEnvVarTarget}=${cxxForBuild}" \
-          "CARGO_TARGET_${stdenv.buildPlatform.rust.cargoEnvVarTarget}_LINKER=${ccForBuild}" \
-          "CARGO_BUILD_TARGET=${rustBuildPlatform}" \
-          "HOST_CC=${pkgsBuildHost.stdenv.cc}/bin/cc" \
-          "HOST_CXX=${pkgsBuildHost.stdenv.cc}/bin/c++" \
+      ''
+      # The build- and host-platform variable names collide whenever the two
+      # platforms share a rust target triple but are not the same package set
+      # -- an intra-ISA cross, e.g. build x86_64-unknown-linux-gnu and host the
+      # same triple with gcc.arch set. Both blocks then expand to the *same*
+      # variable names, `env` places both assignments in the environment, and
+      # getenv() returns the first match, so the buildPlatform compiler silently
+      # wins for hostPlatform code. Observed as a hostPlatform Rust binary being
+      # linked by the buildPlatform cc-wrapper, which does not carry the
+      # hostPlatform's -L paths:
+      #
+      #   ld.bfd: cannot find -lpam: No such file or directory
+      #
+      # even though pam is a perfectly ordinary buildInput.
+      #
+      # Omit the buildPlatform assignments when they would collide; the
+      # hostPlatform block below sets the same names, and in a genuinely native
+      # build it sets them to the same values anyway. This mirrors the
+      # rustTargetPlatform != rustHostPlatform guard already applied further
+      # down for exactly the same class of collision.
+      + lib.optionalString (rustBuildPlatform != rustHostPlatform) ''
+        "CC_${stdenv.buildPlatform.rust.cargoEnvVarTarget}=${ccForBuild}" \
+        "CXX_${stdenv.buildPlatform.rust.cargoEnvVarTarget}=${cxxForBuild}" \
+        "CARGO_TARGET_${stdenv.buildPlatform.rust.cargoEnvVarTarget}_LINKER=${ccForBuild}" \
+      ''
+      + ''
+        "CARGO_BUILD_TARGET=${rustBuildPlatform}" \
+        "HOST_CC=${pkgsBuildHost.stdenv.cc}/bin/cc" \
+        "HOST_CXX=${pkgsBuildHost.stdenv.cc}/bin/c++" \
       ''
       + ''
         "CC_${stdenv.hostPlatform.rust.cargoEnvVarTarget}=${ccForHost}" \
