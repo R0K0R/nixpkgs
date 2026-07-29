@@ -130,7 +130,6 @@ customStdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     hyprwayland-scanner
-    hyprwire
     makeWrapper
     cmake
     pkg-config
@@ -155,6 +154,7 @@ customStdenv.mkDerivation (finalAttrs: {
       hyprgraphics
       hyprlang
       hyprutils
+      hyprwire
       lcms2
       libGL
       libdrm
