@@ -141,6 +141,26 @@ stdenv.mkDerivation (finalAttrs: {
     rm -rf jpeg libpng zlib jasper expat tiff lcms2mt jbig2dec freetype cups/libs ijs openjpeg
 
     sed "s@if ( test -f \$(INCLUDE)[^ ]* )@if ( true )@; s@INCLUDE=/usr/include@INCLUDE=/no-such-path@" -i base/unix-aux.mak
+
+    # genarch and echogs are ghostscript's own build-time code generators,
+    # compiled with $CCAUX=$CC_FOR_BUILD set above rather than the main $CC.
+    # Under gcc 15 with glibc 2.42 they fail to build: glibc's own
+    # bits/stdint-uintn.h typedef trips -Werror=declaration-after-statement,
+    #
+    #   bits/stdint-uintn.h:24:1: error: ISO C90 forbids mixed declarations
+    #   and code [-Werror=declaration-after-statement]
+    #      24 | typedef __uint8_t uint8_t;
+    #
+    # and the env.NIX_CFLAGS_COMPILE below (added for the same class of
+    # gcc-15 fallout) does not reach this compiler invocation.
+    #
+    # The flag originates in configure.ac's `cflags_to_try`, which
+    # ./configure substitutes into GCFLAGS and from there into the generated
+    # Makefiles. Strip it there, before the `autoconf` call below regenerates
+    # ./configure. ghostscript's own configure.ac already strips this exact
+    # flag for C++ (GXXFLAGS) with the same sed pattern; this extends that
+    # same treatment to C.
+    sed -i 's/-Werror=declaration-after-statement//' configure.ac
     sed "s@^ZLIBDIR=.*@ZLIBDIR=${zlib.dev}/include@" -i configure.ac
 
     # Sidestep a bug in autoconf-2.69 that sets the compiler for all checks to
