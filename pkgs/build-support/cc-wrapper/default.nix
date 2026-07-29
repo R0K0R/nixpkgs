@@ -144,9 +144,34 @@ let
   # without interfering. For the moment, it is defined as the target triple,
   # adjusted to be a valid bash identifier. This should be considered an
   # unstable implementation detail, however.
+  # The salt must identify the *derivation*, and the triple alone does not when
+  # two wrappers target the same triple but differ in a sub-attribute -- an
+  # intra-ISA cross, e.g. buildPlatform x86_64-unknown-linux-gnu and
+  # hostPlatform the same triple with gcc.arch set. Both wrappers then share a
+  # salt, so both `NIX_CC_WRAPPER_TARGET_BUILD_<salt>` and
+  # `..._TARGET_HOST_<salt>` are set, accumulateRoles() (wrapper-common/
+  # utils.bash) returns both roles to *each* wrapper, and mangleVarList merges
+  # the other platform's flags in: the host compiler is handed the build
+  # platform's -isystem/-L paths and vice versa.
+  #
+  # Measured on qemu at hostPlatform gcc.arch=meteorlake before this fix:
+  # NIX_CFLAGS_COMPILE 29166 B merged with NIX_CFLAGS_COMPILE_FOR_BUILD 43665 B,
+  # expanding to a 137645 B COLLECT_GCC_OPTIONS -- over the kernel's
+  # MAX_ARG_STRLEN (131072), so gcc could not exec cc1 at all:
+  #   "cannot execute '.../cc1': posix_spawn: Argument list too long"
+  # Same ISA is why this degraded silently into wrong-but-linkable elsewhere
+  # rather than failing loudly.
+  #
+  # Appending gcc.arch mirrors the existing `_static` term, which exists for the
+  # same reason (two Darwin wrappers sharing a triple). Kept empty when gcc.arch
+  # is unset so every ordinary platform's salt -- and therefore every hash in an
+  # ordinary build -- is bit-identical to upstream.
   suffixSalt =
     replaceStrings [ "-" "." ] [ "_" "_" ] targetPlatform.config
-    + lib.optionalString (targetPlatform.isDarwin && targetPlatform.isStatic) "_static";
+    + lib.optionalString (targetPlatform.isDarwin && targetPlatform.isStatic) "_static"
+    + lib.optionalString ((targetPlatform.gcc.arch or "") != "") (
+      "_" + replaceStrings [ "-" "." ] [ "_" "_" ] targetPlatform.gcc.arch
+    );
 
   useGccForLibs =
     useCcForLibs
