@@ -141,6 +141,20 @@ stdenv.mkDerivation (finalAttrs: {
     rm -rf jpeg libpng zlib jasper expat tiff lcms2mt jbig2dec freetype cups/libs ijs openjpeg
 
     sed "s@if ( test -f \$(INCLUDE)[^ ]* )@if ( true )@; s@INCLUDE=/usr/include@INCLUDE=/no-such-path@" -i base/unix-aux.mak
+
+    # genarch/echogs (this file's "aux" code generators, compiled with
+    # $CCAUX=$CC_FOR_BUILD above, not the main $CC) fail under gcc 15 +
+    # glibc 2.42: glibc's own bits/stdint-uintn.h typedef trips
+    # -Werror=declaration-after-statement, and env.NIX_CFLAGS_COMPILE below
+    # (added for the same class of gcc-15 fallout) does not reach this
+    # compiler instance -- $CC_FOR_BUILD is referenced via a bare env var
+    # here, not a declared nativeBuildInputs/depsBuildBuild dependency, so
+    # its wrapper's role markers are never set and it plausibly receives no
+    # Nix-injected flags at all. Strip the flag at its source instead of
+    # relying on flag-ordering to out-suppress it.
+    grep -rl -- '-Werror=declaration-after-statement' base/*.mak 2>/dev/null | while read -r f; do
+      sed -i 's/-Werror=declaration-after-statement//' "$f"
+    done || true
     sed "s@^ZLIBDIR=.*@ZLIBDIR=${zlib.dev}/include@" -i configure.ac
 
     # Sidestep a bug in autoconf-2.69 that sets the compiler for all checks to
