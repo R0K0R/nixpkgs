@@ -104,10 +104,16 @@ let
   # The wrapper scripts use 'cat' and 'grep', so we may need coreutils.
   coreutils_bin = optionalString (!nativeTools) (getBin coreutils);
 
-  # See description in cc-wrapper.
+  # See description in cc-wrapper. The gcc.arch term disambiguates two wrappers
+  # that share a triple but differ in microarchitecture (intra-ISA cross);
+  # without it accumulateRoles() hands each wrapper the other's role and their
+  # NIX_LDFLAGS are merged.
   suffixSalt =
     replaceStrings [ "-" "." ] [ "_" "_" ] targetPlatform.config
-    + lib.optionalString (targetPlatform.isDarwin && targetPlatform.isStatic) "_static";
+    + lib.optionalString (targetPlatform.isDarwin && targetPlatform.isStatic) "_static"
+    + lib.optionalString ((targetPlatform.gcc.arch or "") != "") (
+      "_" + replaceStrings [ "-" "." ] [ "_" "_" ] targetPlatform.gcc.arch
+    );
 
   # The dynamic linker has different names on different platforms. This is a
   # shell glob that ought to match it.
