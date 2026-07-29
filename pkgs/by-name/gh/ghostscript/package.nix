@@ -150,11 +150,17 @@ stdenv.mkDerivation (finalAttrs: {
     # compiler instance -- $CC_FOR_BUILD is referenced via a bare env var
     # here, not a declared nativeBuildInputs/depsBuildBuild dependency, so
     # its wrapper's role markers are never set and it plausibly receives no
-    # Nix-injected flags at all. Strip the flag at its source instead of
-    # relying on flag-ordering to out-suppress it.
-    grep -rl -- '-Werror=declaration-after-statement' base/*.mak 2>/dev/null | while read -r f; do
-      sed -i 's/-Werror=declaration-after-statement//' "$f"
-    done || true
+    # Nix-injected flags at all.
+    #
+    # The flag actually lives in configure.ac's `cflags_to_try` (~line 345),
+    # which ./configure substitutes into GCFLAGS and from there into every
+    # generated Makefile -- NOT in any base/*.mak file (an earlier version of
+    # this patch stripped base/unix-gcc.mak, a dead legacy build path unused
+    # when going through ./configure, and did nothing). Must run before the
+    # `autoconf` call below, which regenerates ./configure from this file.
+    # ghostscript's own configure.ac already strips this same flag for C++
+    # (GXXFLAGS, ~line 3973) via the same sed pattern -- this extends that to C.
+    sed -i 's/-Werror=declaration-after-statement//' configure.ac
     sed "s@^ZLIBDIR=.*@ZLIBDIR=${zlib.dev}/include@" -i configure.ac
 
     # Sidestep a bug in autoconf-2.69 that sets the compiler for all checks to
