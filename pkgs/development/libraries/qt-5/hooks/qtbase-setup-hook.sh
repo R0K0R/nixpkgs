@@ -65,7 +65,14 @@ qmakePathHook() {
         QMAKEPATH="${QMAKEPATH}${QMAKEPATH:+:}$1"
     fi
 }
+# envBuildHostHooks reaches pkgsBuildHost only, i.e. nativeBuildInputs. The Qt
+# modules whose mkspecs qmake needs are ordinary buildInputs, in pkgsHostTarget,
+# so under strictDeps they are never collected and QMAKEPATH ends up holding
+# nothing but qtbase itself -- "Unknown module(s) in QT: ..." at configure time.
+# Same defect and same fix as the qt-6 hook. qmakePathSeen above keeps this
+# idempotent for anything appearing in both lists.
 envBuildHostHooks+=(qmakePathHook)
+envHostTargetHooks+=(qmakePathHook)
 
 # Propagate any runtime dependency of the building package.
 # Each dependency is propagated to the user environment and as a build
