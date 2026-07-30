@@ -178,6 +178,21 @@ customStdenv.mkDerivation (finalAttrs: {
       tomlplusplus
       wayland
       wayland-protocols
+      # CMakeLists.txt:83 does
+      #   pkg_get_variable(WAYLAND_SCANNER_PKGDATA_DIR wayland-scanner pkgdatadir)
+      # and then reads ${WAYLAND_SCANNER_PKGDATA_DIR}/wayland.xml (line 514).
+      # That query goes through the hostPlatform pkg-config, but wayland-scanner
+      # is listed only in nativeBuildInputs, so its .pc is in the buildPlatform
+      # search path and the variable comes back empty:
+      #
+      #   -- Found wayland-scanner pkgdatadir at
+      #   Couldn't load proto
+      #
+      # -- the path degenerates to /wayland.xml. Every other protocol generates
+      # fine, since those come from wayland-protocols, which is here already.
+      # Genuinely wanted on both platforms: the scanner binary to run, and the
+      # .pc plus wayland.xml to read. Same shape as hyprwire above.
+      wayland-scanner
     ]
     (optionals customStdenv.hostPlatform.isBSD [ epoll-shim ])
     (optionals customStdenv.hostPlatform.isMusl [ libexecinfo ])
