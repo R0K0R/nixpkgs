@@ -43,6 +43,18 @@ gcc16Stdenv.mkDerivation (finalAttrs: {
   buildInputs = [
     cairo
     hyprutils
+    # CMakeLists.txt:57 asks for hyprwayland-scanner through
+    # pkg_check_modules, i.e. via the hostPlatform pkg-config, even though the
+    # scanner itself is a buildPlatform tool (listed in nativeBuildInputs
+    # above). Without a hostPlatform copy that query fails:
+    #
+    #   No package 'hyprwayland-scanner' found
+    #   CMake Error ... required packages were not found
+    #
+    # It is genuinely wanted on both platforms -- the executable to run, and
+    # the .pc to satisfy the version check -- so list it in both. Same shape as
+    # hyprwire in hyprland.
+    hyprwayland-scanner
     libGL
     libjpeg
     libxkbcommon
