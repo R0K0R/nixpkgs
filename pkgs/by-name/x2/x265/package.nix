@@ -102,8 +102,26 @@ stdenv.mkDerivation (finalAttrs: {
   nativeBuildInputs = [
     cmake
     nasm
-  ]
-  ++ lib.optionals numaSupport [ numactl ];
+  ];
+
+  # libnuma is linked into libx265.so (DT_NEEDED libnuma.so.1) and its headers
+  # are compiled against, so it is a hostPlatform dependency -- note that
+  # `numaSupport` above is itself gated on stdenv.hostPlatform. Upstream lists
+  # it in nativeBuildInputs, which is masked on a native build: there the same
+  # cc-wrapper derivation serves both roles, so it carries both the BUILD and
+  # HOST role markers and picks up NIX_LDFLAGS_FOR_BUILD alongside NIX_LDFLAGS.
+  # Under cross the two wrappers are distinct, the -L never reaches the host
+  # link, and the result is a libx265.so with a DT_NEEDED for libnuma.so.1 but
+  # no RUNPATH entry for it -- numactl is absent from x265's closure entirely,
+  # so the library is unloadable, and any downstream link fails:
+  #
+  #   ld.bfd: warning: libnuma.so.1, needed by .../libx265.so.216, not found
+  #   ld.bfd: .../libx265.so.216: undefined reference to `numa_max_node@libnuma_1.1'
+  #
+  # (seen from libheif). ld does follow the DT_RUNPATH of a needed library to
+  # resolve its dependencies, so fixing the RUNPATH here is enough -- downstream
+  # consumers need no change.
+  buildInputs = lib.optionals numaSupport [ numactl ];
 
   cmakeFlags = [
     (lib.cmakeBool "ENABLE_ALPHA" true)
