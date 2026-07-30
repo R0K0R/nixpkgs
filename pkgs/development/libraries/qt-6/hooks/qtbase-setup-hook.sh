@@ -39,7 +39,19 @@ else # Only set up Qt once.
             QMAKEPATH="${QMAKEPATH}${QMAKEPATH:+:}$1"
         fi
     }
+    # envBuildHostHooks reaches pkgsBuildHost only, i.e. nativeBuildInputs. The
+    # Qt modules whose mkspecs qmake needs are ordinary buildInputs, which live
+    # in pkgsHostTarget, so under strictDeps they were never collected and
+    # QMAKEPATH came out holding nothing but qtbase itself:
+    #
+    #   QMAKEPATH=<qtbase>-dev:<qtbase>
+    #   Project ERROR: Unknown module(s) in QT: quick quickcontrols2 svg
+    #
+    # (seen from moonlight-qt). Add the hostPlatform accumulator as well.
+    # qmakePathSeen above already makes this idempotent for anything that
+    # appears in both lists.
     envBuildHostHooks+=(qmakePathHook)
+    envHostTargetHooks+=(qmakePathHook)
 
     declare -g qttoolsPathSeen=
     qtToolsHook() {
