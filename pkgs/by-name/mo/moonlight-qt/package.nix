@@ -19,6 +19,7 @@
   libxkbcommon,
   wayland,
   libdrm,
+  libGL,
   nix-update-script,
 }:
 
@@ -68,6 +69,17 @@ stdenv.mkDerivation (finalAttrs: {
     qt6.qtwayland
     wayland
     libdrm
+    # streaming/video/ffmpeg-renderers/renderer.h pulls in SDL_egl.h, which
+    # opens with #include <EGL/egl.h>, and the EGL renderer is compiled in
+    # (-DHAVE_EGL). Nothing here declared a provider for that header:
+    #
+    #   SDL_egl.h:32:10: fatal error: EGL/egl.h: No such file or directory
+    #
+    # It resolved before only by leaking out of the buildPlatform qtbase
+    # reached via qt6.qmake in nativeBuildInputs, whose closure carries
+    # libglvnd -- i.e. the hostPlatform compile was reading buildPlatform
+    # headers. Declare it on the platform that actually needs it.
+    libGL
   ];
 
   qmakeFlags = [ "CONFIG+=disable-prebuilts" ];
