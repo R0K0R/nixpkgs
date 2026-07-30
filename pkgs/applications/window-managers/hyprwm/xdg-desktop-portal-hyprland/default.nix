@@ -63,6 +63,19 @@ stdenv.mkDerivation (finalAttrs: {
     wayland
     wayland-protocols
     wayland-scanner
+    # CMakeLists.txt:56 does a single pkg_check_modules() call that bundles
+    # hyprwayland-scanner in with genuine buildInputs (wayland-client,
+    # libpipewire, libdrm, hyprlang, hyprutils, ...). That query goes through
+    # the hostPlatform pkg-config, but hyprwayland-scanner was listed only in
+    # nativeBuildInputs, so its .pc lived in the buildPlatform search path
+    # instead and the check came back NOTFOUND:
+    #
+    #   No package 'hyprwayland-scanner' found
+    #
+    # Genuinely wanted on both platforms, same shape as wayland-scanner above:
+    # the scanner binary to run at build time, and the .pc to satisfy this
+    # check.
+    hyprwayland-scanner
   ];
 
   cmakeBuildType = if debug then "Debug" else "RelWithDebInfo";
