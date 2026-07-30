@@ -130,6 +130,11 @@ customStdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     hyprwayland-scanner
+    # Provides bin/hyprwire-scanner, a build-time protocol generator. Also
+    # listed in buildInputs, since the same package ships libhyprwire.so which
+    # hyprland links against -- it is genuinely both, so it belongs in both
+    # lists.
+    hyprwire
     makeWrapper
     cmake
     pkg-config
