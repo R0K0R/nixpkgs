@@ -112,6 +112,31 @@ stdenv.mkDerivation (finalAttrs: {
     #
     # Pure headers, so platform is immaterial; routed the same way as the rest.
     "INCLUDEPATH+=${vulkan-headers}/include"
+
+    # The same buildPlatform-wrapper gap hits the final link, not just
+    # compilation. `QT += quick qml opengl gui network core svg` resolves each
+    # module to a full .so path via qt.prf, but every one of those modules also
+    # ships a .prl (e.g. qtdeclarative's libQt6Quick.prl) whose
+    # QMAKE_PRL_LIBS lists its OWN transitive deps as bare linker flags:
+    #
+    #   QMAKE_PRL_LIBS = -lQt6OpenGL -lQt6Gui -lGLX -lOpenGL -lQt6Qml -lQt6Network -lQt6Core
+    #
+    # On a native build these resolve because the cc-wrapper auto-injects
+    # -L<buildInput>/lib for every buildInput, transparently to qmake. Here the
+    # link runs under the same bare, buildPlatform-resolved g++ as the compile
+    # (see above), which reads NIX_LDFLAGS_FOR_BUILD -- nativeBuildInputs only
+    # -- so none of the hostPlatform -L flags for qtbase/qtdeclarative/libGL
+    # ever reach this invocation:
+    #
+    #   ld.bfd: cannot find -lQt6Quick: No such file or directory
+    #   ld.bfd: cannot find -lGLX: No such file or directory
+    #
+    # (libdrm/libplacebo/wayland/libva etc. don't hit this: they're pulled in
+    # via PKGCONFIG, whose -L/-l output is baked into the Makefile as literal
+    # strings at configure time, not dependent on which wrapper does the link.)
+    "QMAKE_LFLAGS+=-L${lib.getLib qt6.qtbase}/lib"
+    "QMAKE_LFLAGS+=-L${lib.getLib qt6.qtdeclarative}/lib"
+    "QMAKE_LFLAGS+=-L${lib.getLib libGL}/lib"
   ];
 
   # During buildPhase, qmake re-runs for sub-projects that lack a Makefile
