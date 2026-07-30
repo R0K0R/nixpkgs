@@ -176,6 +176,24 @@ buildPythonApplication rec {
     ''
       runHook preBuild
 
+      # setup.py picks its pkg-config as
+      #   PKGCONFIG = os.environ.get('PKGCONFIG_EXE', 'pkg-config')
+      # and that bare name is ambiguous here: both the depsBuildBuild wrapper
+      # and the nativeBuildInputs one install a bin/pkg-config, and
+      # depsBuildBuild wins because _activatePkgs walks pkgsBuildBuild before
+      # pkgsBuildHost while addToSearchPath appends. So every query resolves
+      # against the buildPlatform .pc set:
+      #
+      #   No package 'libxxhash' found
+      #
+      # But each of these -- libxxhash, harfbuzz, libpng, lcms2, libcrypto,
+      # cairo-fc -- is a library linked into the hostPlatform binary, so they
+      # must be answered by the hostPlatform-targeting wrapper. $PKG_CONFIG is
+      # exactly that wrapper -- the nativeBuildInputs copy exports it under the
+      # empty role suffix -- so point setup.py's own override at it rather than
+      # adding buildPlatform copies of hostPlatform libraries.
+      export PKGCONFIG_EXE="''${PKG_CONFIG:-pkg-config}"
+
       # Add the font by hand because fontconfig does not finds it in darwin
       mkdir ./fonts/
       cp "${nerd-fonts.symbols-only}/share/fonts/truetype/NerdFonts/Symbols/SymbolsNerdFontMono-Regular.ttf" ./fonts/
