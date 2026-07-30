@@ -87,11 +87,37 @@
         "HOST_CC=${pkgsBuildHost.stdenv.cc}/bin/cc" \
         "HOST_CXX=${pkgsBuildHost.stdenv.cc}/bin/c++" \
       ''
-      + ''
-        "CC_${stdenv.hostPlatform.rust.cargoEnvVarTarget}=${ccForHost}" \
-        "CXX_${stdenv.hostPlatform.rust.cargoEnvVarTarget}=${cxxForHost}" \
-        "CARGO_TARGET_${stdenv.hostPlatform.rust.cargoEnvVarTarget}_LINKER=${ccForHost}" \
-      ''
+      + (
+        let
+          # When every rust triple collides, both guarded blocks are omitted and
+          # this one is the only source of CC_/CXX_/CARGO_TARGET_*_LINKER. It
+          # must then name the compiler for the platform actually being built
+          # for, which is targetPlatform: consumers of these variables reach
+          # them through nativeBuildInputs, one platform slot earlier, so
+          # `hostPlatform` here is the build machine and ccForHost is its
+          # compiler. Emitting that links hostPlatform code with the
+          # buildPlatform wrapper, which carries none of the hostPlatform's -L
+          # paths:
+          #
+          #   ld.bfd: cannot find -lpam: No such file or directory
+          #
+          # for a pam that is an ordinary buildInput.
+          #
+          # Only the *name* collides; the correct value is still ccForTarget.
+          # Unaffected when the triples differ, since then the guarded blocks
+          # emit their own correctly-named variables and this one genuinely
+          # describes hostPlatform.
+          collides =
+            rustTargetPlatform == rustHostPlatform && stdenv.hostPlatform != stdenv.targetPlatform;
+          cc' = if collides then ccForTarget else ccForHost;
+          cxx' = if collides then cxxForTarget else cxxForHost;
+        in
+        ''
+          "CC_${stdenv.hostPlatform.rust.cargoEnvVarTarget}=${cc'}" \
+          "CXX_${stdenv.hostPlatform.rust.cargoEnvVarTarget}=${cxx'}" \
+          "CARGO_TARGET_${stdenv.hostPlatform.rust.cargoEnvVarTarget}_LINKER=${cc'}" \
+        ''
+      )
       # Due to a bug in how splicing and pkgsTargetTarget works, in
       # situations where pkgsTargetTarget is irrelevant
       # pkgsTargetTarget.stdenv.cc is often simply wrong.  We must omit
