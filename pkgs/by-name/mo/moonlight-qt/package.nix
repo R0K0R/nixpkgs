@@ -82,7 +82,18 @@ stdenv.mkDerivation (finalAttrs: {
     libGL
   ];
 
-  qmakeFlags = [ "CONFIG+=disable-prebuilts" ];
+  qmakeFlags = [
+    "CONFIG+=disable-prebuilts"
+    # Declaring libGL as a buildInput is not enough to make <EGL/egl.h>
+    # reachable here. qmake configures against the linux-g++ mkspec, whose
+    # QMAKE_CXX is a bare `g++` -- so the compile runs under the buildPlatform
+    # wrapper, which reads NIX_CFLAGS_COMPILE_FOR_BUILD and never sees the
+    # -isystem a hostPlatform buildInput contributes. Every other include on
+    # that command line is there explicitly, emitted by qmake from PKGCONFIG or
+    # INCLUDEPATH; libGL was the only one relying on wrapper injection. So put
+    # it on the command line the same way the rest get there.
+    "INCLUDEPATH+=${lib.getDev libGL}/include"
+  ];
 
   postInstall = lib.optionalString stdenv.hostPlatform.isDarwin ''
     mkdir $out/Applications $out/bin
