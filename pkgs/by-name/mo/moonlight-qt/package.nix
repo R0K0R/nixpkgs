@@ -92,7 +92,15 @@ stdenv.mkDerivation (finalAttrs: {
     # that command line is there explicitly, emitted by qmake from PKGCONFIG or
     # INCLUDEPATH; libGL was the only one relying on wrapper injection. So put
     # it on the command line the same way the rest get there.
+    #
+    # libvdpau is the same case: streaming/video/ffmpeg-renderers/vdpau.h
+    # includes <vdpau/vdpau.h> and <vdpau/vdpau_x11.h>, and the VDPAU renderer
+    # is compiled in, but nothing emits a -I for it. Of the system headers this
+    # source includes directly -- libdrm, va, vdpau, wayland -- every other one
+    # already arrives explicitly through PKGCONFIG; these two were the only
+    # gaps.
     "INCLUDEPATH+=${lib.getDev libGL}/include"
+    "INCLUDEPATH+=${lib.getDev libvdpau}/include"
   ];
 
   # During buildPhase, qmake re-runs for sub-projects that lack a Makefile
