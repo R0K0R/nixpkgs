@@ -101,6 +101,17 @@ stdenv.mkDerivation (finalAttrs: {
     # gaps.
     "INCLUDEPATH+=${lib.getDev libGL}/include"
     "INCLUDEPATH+=${lib.getDev libvdpau}/include"
+    # And vulkan-headers, reached indirectly: libplacebo/vulkan.h opens with
+    # #include <vulkan/vulkan.h>, and the libplacebo Vulkan path is compiled in
+    # (-DHAVE_LIBPLACEBO_VULKAN). It is listed in nativeBuildInputs, which does
+    # not reach this compile either -- the earlier assumption that a
+    # nativeBuildInput's headers would arrive here, since the compiler is the
+    # buildPlatform wrapper, turned out to be wrong:
+    #
+    #   libplacebo/vulkan.h:21:10: fatal error: vulkan/vulkan.h: No such file
+    #
+    # Pure headers, so platform is immaterial; routed the same way as the rest.
+    "INCLUDEPATH+=${vulkan-headers}/include"
   ];
 
   # During buildPhase, qmake re-runs for sub-projects that lack a Makefile
