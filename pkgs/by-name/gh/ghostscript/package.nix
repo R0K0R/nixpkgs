@@ -98,6 +98,28 @@ stdenv.mkDerivation (finalAttrs: {
 
   depsBuildBuild = [
     buildPackages.stdenv.cc
+    # genarch and echogs are buildPlatform aux tools (compiled with
+    # CCAUX=$CC_FOR_BUILD, set in preConfigure), but base/unix-aux.mak links
+    # them with the project-wide LDFLAGS, which include -lpaper from the
+    # hostPlatform buildInputs below. The buildPlatform compiler has no
+    # hostPlatform -L paths, so the link fails:
+    #
+    #   ld.bfd: cannot find -lpaper: No such file or directory
+    #   make[2]: *** [base/unix-aux.mak:68: soobj/aux/genarch] Error 1
+    #
+    # Supply buildPlatform copies of everything the aux compiles reference.
+    # This is not only inherited link flags: base/unix-aux.mak also compiles
+    # gp_unix.c, ghostscript's platform layer, which #includes
+    # fontconfig/fontconfig.h -- so headers are needed as well, and these are
+    # real dependencies of real buildPlatform programs rather than stray flags.
+    # The set mirrors the aux link line (-lpaper -ltiff -lfontconfig -lfreetype
+    # -lopenjp2 -lz).
+    buildPackages.libpaper
+    buildPackages.fontconfig
+    buildPackages.freetype
+    buildPackages.libtiff
+    buildPackages.openjpeg
+    buildPackages.zlib
   ];
 
   nativeBuildInputs = [
