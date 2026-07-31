@@ -27,7 +27,10 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [ autoreconfHook ];
 
-  configureFlags = [ "--with-hotplug-dir=$(out)/lib/firmware" ];
+  configureFlags = [
+    "--with-hotplug-dir=$(out)/lib/firmware"
+    "CC=${stdenv.cc}/bin/${stdenv.cc.targetPrefix}cc"
+  ];
 
   depsBuildBuild = lib.optional (
     stdenv.buildPlatform != stdenv.hostPlatform
