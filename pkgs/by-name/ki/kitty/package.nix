@@ -194,6 +194,29 @@ buildPythonApplication rec {
       # adding buildPlatform copies of hostPlatform libraries.
       export PKGCONFIG_EXE="''${PKG_CONFIG:-pkg-config}"
 
+      # glfw/glfw.py's Wayland detection queries this SAME PKGCONFIG_EXE for
+      # `wayland-scanner --variable=wayland_scanner` (glfw.py:184). But
+      # wayland-scanner is a native build tool, not a hostPlatform library --
+      # its .pc lives in nativeBuildInputs, not on $PKG_CONFIG's (hostPlatform)
+      # search path. The fix above pointed every query at the hostPlatform
+      # wrapper, which broke this one instead:
+      #
+      #   Package wayland-scanner was not found in the pkg-config search path.
+      #   Disabling building of wayland backend
+      #
+      # kitty ends up on the XWayland fallback -- runs, but blurry: this
+      # process gets no HiDPI/fractional-scale info, so Hyprland just
+      # bitmap-scales its X11-resolution buffer to fit the real output.
+      #
+      # setup.py exposes only one global PKGCONFIG override point, so instead
+      # of routing the whole binary choice, extend $PKG_CONFIG's own search
+      # path to also cover wayland-scanner's .pc. Intra-ISA cross means the
+      # underlying pkg-config binary genuinely doesn't care which platform's
+      # copy answers -- .pc content is data, not code -- so widening the one
+      # wrapper already selected is enough; nothing else on that search path
+      # collides with a wayland-scanner.pc.
+      export PKG_CONFIG_PATH="${lib.getDev wayland-scanner}/lib/pkgconfig''${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+
       # Add the font by hand because fontconfig does not finds it in darwin
       mkdir ./fonts/
       cp "${nerd-fonts.symbols-only}/share/fonts/truetype/NerdFonts/Symbols/SymbolsNerdFontMono-Regular.ttf" ./fonts/
