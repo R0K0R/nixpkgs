@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   calf,
   cmake,
   deepfilternet,
@@ -57,6 +58,10 @@ let
     qqc2-desktop-style
     ;
   speexdsp' = speexdsp.override { withFftw3 = false; };
+  isCross = stdenv.hostPlatform != stdenv.buildPlatform;
+  nativeKconfig = buildPackages.kdePackages.kconfig;
+  nativeQtdeclarative = buildPackages.qt6.qtdeclarative;
+  nativeQtquick3d = buildPackages.qt6.qtquick3d;
 in
 
 stdenv.mkDerivation (finalAttrs: {
@@ -78,9 +83,36 @@ stdenv.mkDerivation (finalAttrs: {
     pkg-config
     wrapGAppsHook3
     wrapQtAppsHook
+  ]
+  ++ lib.optionals isCross [
+    nativeKconfig
+    nativeQtdeclarative
+    nativeQtquick3d
   ];
 
   dontWrapGApps = true;
+
+  # qtgraphs' own cmake config (Qt6GraphsDependencies.cmake) internally
+  # find_package()s Qt6Quick/Qt6Qml (from qtdeclarative) and Qt6Quick3D, but
+  # only searches under CMAKE_CURRENT_LIST_DIR/.. (the HOST qtgraphs
+  # prefix) -- neither qtdeclarative nor qtquick3d are easyeffects' own
+  # direct inputs, so the generic addCMakeCrossHelperFlags hook (which only
+  # reads cmake-cross-helper-flags off THIS derivation's own
+  # buildInputs/nativeBuildInputs) never sees them. Point cmake at the
+  # BUILD-platform *Tools_DIR configs directly.
+  #
+  # KF6Config_DIR: easyeffects isn't built with mkKdeDerivation, so KDE
+  # Frameworks' KF6_HOST_TOOLING convention (which kf6HostTooling covers)
+  # doesn't apply here; kconfigwidgets pulls in kconfig's HOST cmake config,
+  # which points its own kconfig_add_kcfg_files macro at the HOST-tuned
+  # kconfig_compiler_kf6, so cross-build must be told to use the
+  # BUILD-platform one instead.
+  cmakeFlags = lib.optionals isCross [
+    "-DQt6QmlTools_DIR=${nativeQtdeclarative}/lib/cmake/Qt6QmlTools"
+    "-DQt6QuickTools_DIR=${nativeQtdeclarative}/lib/cmake/Qt6QuickTools"
+    "-DQt6Quick3DTools_DIR=${nativeQtquick3d}/lib/cmake/Qt6Quick3DTools"
+    "-DKF6Config_DIR=${nativeKconfig.dev}/lib/cmake/KF6Config"
+  ];
 
   buildInputs = [
     breeze
