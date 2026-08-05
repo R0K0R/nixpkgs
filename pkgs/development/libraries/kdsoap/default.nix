@@ -5,6 +5,7 @@
   cmake,
   qtbase,
   wrapQtAppsHook,
+  buildPackages,
 }:
 
 let
@@ -38,6 +39,23 @@ stdenv.mkDerivation rec {
     moveToOutput bin/kdwsdl2cpp* "$dev"
     substituteInPlace "$out/lib/cmake/${cmakeName}/KDSoapTargets-release.cmake" \
       --replace $out/bin $dev/bin
+  ''
+  # kdwsdl2cpp is KDSoap::kdwsdl2cpp, a build-time WSDL code generator every
+  # consumer's own build invokes via this exported cmake target -- not a
+  # runtime library. In a cross (or intra-ISA pseudo-cross) build, the HOST
+  # kdwsdl2cpp this package just built may not be safely executable on the
+  # actual build machine (wrong ISA outright, or -- confirmed via a real
+  # SIGILL on yulee -- a different microarch tuning even when the ISA
+  # matches). KDSoap's own cmake config has no cross-awareness of its own
+  # (unlike KDE Frameworks' KF6_HOST_TOOLING convention, which this doesn't
+  # implement), so point IMPORTED_LOCATION at the BUILD-platform kdwsdl2cpp
+  # here, once, rather than leaving every individual consumer of KDSoap to
+  # patch this same cmake file downstream (which is what happened before:
+  # kdsoap-ws-discovery-client carried its own copy of this exact
+  # substitution).
+  + lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    substituteInPlace "$out/lib/cmake/${cmakeName}/KDSoapTargets-release.cmake" \
+      --replace-fail "$dev/bin/kdwsdl2cpp" "${buildPackages.kdePackages.kdsoap.dev}/bin/kdwsdl2cpp"
   '';
 
   meta = {
