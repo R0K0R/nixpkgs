@@ -119,6 +119,32 @@ export NIX_CC${role_post}=@out@
 export CC${role_post}=@named_cc@
 export CXX${role_post}=@named_cxx@
 
+# Intra-ISA pseudo-cross: depsBuildBuild's raw (unwrapped) compiler also
+# installs a self-aliased ${triple}-gcc binary -- GCC's own upstream build
+# convention always names a binary after its own --target=, regardless of
+# whether the host system's name happens to match. Since _activatePkgs
+# walks pkgsBuildBuild's dependencies before pkgsHostHost's, that raw
+# compiler's bin/ lands on PATH before this wrapper's own bin/, so a bare
+# PATH lookup for the exact same name (e.g. autoconf's AC_PROG_CC trying
+# `${host_alias}-gcc` before trusting a pre-set $CC) can silently resolve
+# to the WRONG compiler: same triple, but the raw build-platform gcc's own
+# glibc/crt pairing, not this wrapper's. Confirmed via a real build
+# failure (alsa-firmware): "cannot find Scrt1.o"/"crti.o" from a genuinely
+# valid ELF gcc that simply isn't the one meant for this build.
+#
+# Only for the plain (role_post-unsuffixed) wrapper instance -- that's the
+# one whose output populates $NIX_CC/$CC above, i.e. the actual host-role
+# compiler this fix exists to protect. depsBuildBuild's raw compiler has no
+# setup hook of its own to gate the opposite way, so nothing here needs to
+# defend against double-prioritization.
+if [ -n "${NIX_IS_INTRA_ISA_CROSS:-}" ] && [ -z "$role_post" ]; then
+    _ccWrapperCrossPriority() { export PATH="@out@/bin:$PATH"; }
+    preConfigureHooks+=(_ccWrapperCrossPriority)
+    preBuildHooks+=(_ccWrapperCrossPriority)
+    preCheckHooks+=(_ccWrapperCrossPriority)
+    preInstallHooks+=(_ccWrapperCrossPriority)
+fi
+
 # If unset, assume the default hardening flags.
 : ${NIX_HARDENING_ENABLE="@default_hardening_flags_str@"}
 export NIX_HARDENING_ENABLE
