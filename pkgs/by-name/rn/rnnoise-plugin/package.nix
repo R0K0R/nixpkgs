@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   cmake,
   fetchFromGitHub,
   freetype,
@@ -32,6 +33,16 @@ stdenv.mkDerivation (finalAttrs: {
   nativeBuildInputs = [
     cmake
     pkg-config
+  ]
+  # This vendors JUCE, which spawns a subprocess cmake invocation to build
+  # juceaide (its native code-gen tool); that subprocess searches PATH for
+  # plain 'cc'/'gcc' rather than trusting the outer build's $CC. A cross
+  # cc-wrapper only provides triple-prefixed names, so the subprocess cmake
+  # fails with "No CMAKE_C_COMPILER could be found". Put the BUILD-platform
+  # cc-wrapper's plain-named binaries on PATH so juceaide's own subprocess
+  # build can find a compiler.
+  ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    buildPackages.stdenv.cc
   ];
 
   patches = lib.optionals stdenv.hostPlatform.isDarwin [
