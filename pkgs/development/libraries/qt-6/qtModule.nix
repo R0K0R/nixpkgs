@@ -39,7 +39,25 @@ stdenv.mkDerivation (
         ninja
         perl
       ]
-      ++ lib.optionals stdenv.hostPlatform.isDarwin [ moveBuildTree ];
+      ++ lib.optionals stdenv.hostPlatform.isDarwin [ moveBuildTree ]
+      # The *Tools_DIR cmake flags above only tell cmake WHERE to look; the
+      # referenced pkgsBuildBuild.qt6.* packages still need to actually be
+      # present in the sandbox for their tool binaries to be invocable during
+      # THIS module's own build (e.g. qtdeclarative needs native qtshadertools'
+      # qsb to compile Quick's shaders, and native qtdeclarative's own
+      # Qt6QuickTools for svgtoqml -- without them Quick is silently skipped
+      # and every downstream consumer's `if(TARGET Qt::Quick)` check fails).
+      # Each pname only forces the pkgsBuildBuild.qt6.<mod> it actually needs.
+      ++ lib.optionals (isCrossOrPseudo && pname == "qtdeclarative") [
+        pkgsBuildBuild.qt6.qtshadertools
+        pkgsBuildBuild.qt6.qtdeclarative
+      ]
+      ++ lib.optionals (isCrossOrPseudo && pname == "qtscxml") [
+        pkgsBuildBuild.qt6.qtscxml
+      ]
+      ++ lib.optionals (isCrossOrPseudo && pname == "qtremoteobjects") [
+        pkgsBuildBuild.qt6.qtremoteobjects
+      ];
     propagatedBuildInputs =
       (lib.warnIf (args ? qtInputs) "qt6.qtModule's qtInputs argument is deprecated" args.qtInputs or [ ])
       ++ (args.propagatedBuildInputs or [ ]);
