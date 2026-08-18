@@ -338,6 +338,21 @@
             })
           ]
 
+      ++ lib.optionals (lib.versionAtLeast version "9.10" && lib.versionOlder version "9.11") [
+        # Backport of ghc d5f420450e86cedca8 ("Interpreter: Add locking for
+        # communication with external interpreter", landed in 9.12): GHC's
+        # 9.6-9.10 external-interpreter client sends messages over the iserv
+        # pipe with no mutual exclusion -- withIServ's "Grab a lock" comment
+        # is a fossil from the pre-9.6 code that held an MVar across the
+        # action. With --make -jN, parallel modules run TH conversations
+        # concurrently over the one pipe, interleaving replies (GHC #25083).
+        # Symptoms seen here: "iserv-proxy: getBin: Done with leftovers" and
+        # "External interpreter terminated (-15)" in any cross Haskell build
+        # with TH under -j (first hit: JuicyPixels via pandoc). Reproduced
+        # deterministically-flakily with 12 TH modules at -j16.
+        # Wasm.hs and testsuite hunks dropped: 9.10 has no wasm interpreter.
+        ./ghc-9.10-iserv-lock-backport.patch
+      ]
       ++ (import ./common-llvm-patches.nix { inherit lib version fetchpatch; });
 
     stdenv = stdenvNoCC;
