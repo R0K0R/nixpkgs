@@ -354,16 +354,7 @@ let
   ]
   ++ optional doHaddock "--with-haddock=${ghc.targetPrefix}haddock"
   ++ optionals (!isHaLVM) [
-    # hsc2hs --cross-compile derives constants statically instead of running a
-    # compiled probe, and several directives simply cannot be answered that
-    # way -- #const_str aborts outright with "directive const_str cannot be
-    # handled in cross-compilation mode" (hit by lua-2.3.4 via pandoc).
-    #
-    # Under intra-ISA cross the build machine shares the host ABI, so it can
-    # execute the probes exactly as it would in a native build. Let it.
-    (optionalString (
-      !(stdenv.isIntraISACross or false)
-    ) "--hsc2hs-option=--cross-compile")
+    "--hsc2hs-option=--cross-compile"
     (optionalString enableHsc2hsViaAsm "--hsc2hs-option=--via-asm")
   ]
   ++ optional (allPkgconfigDepends != [ ]) "--with-pkg-config=${pkg-config.targetPrefix}pkg-config"
