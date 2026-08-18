@@ -254,24 +254,8 @@ in
   # of `meta.pkgConfigModules`. This option defaults to false for now, since
   # this metadata is far from complete in nixpkgs.
   __onlyPropagateKnownPkgConfigModules ? false,
-  # The external interpreter exists so TemplateHaskell splices can run when the
-  # build machine cannot load host objects into the compiler process. Under
-  # intra-ISA cross that is not the case: build and host share a config string
-  # and an ABI, differing only in gcc.arch, so GHC here is a native compiler
-  # ("cross compiling","NO" in its settings) emitting differently-tuned code,
-  # and its in-process interpreter handles splices directly. Routing them
-  # through iserv-proxy instead adds a fragile IPC layer that buys nothing and
-  # in practice desynchronises ("getBin: Done with leftovers", then
-  # "External interpreter terminated (-15)"; seen on JuicyPixels).
-  #
-  # Deliberately not buildPlatform.canExecute hostPlatform: that is true for
-  # e.g. x86_64 -> i686, where host objects still cannot be loaded into an
-  # x86_64 GHC. Same-config is the condition that actually matters.
   enableExternalInterpreter ?
-    isCross
-    && !(stdenv.isIntraISACross or false)
-    && crossSupport.canProxyTH
-    && crossSupport.needsExternalInterpreterSetup,
+    isCross && crossSupport.canProxyTH && crossSupport.needsExternalInterpreterSetup,
   __darwinAllowLocalNetworking ? false,
 }@args:
 
