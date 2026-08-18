@@ -309,12 +309,24 @@ stdenvNoCC.mkDerivation {
           ln -sf "${targetPrefix}''${binary}${exeSuffix}" "$out/bin/''${binary}${exeSuffix}"
         fi
       done
-      if [ -e "$out/bin/${targetPrefix}ld${exeSuffix}" ]; then
-        ln -sf "${targetPrefix}ld${exeSuffix}" "$out/bin/ld${exeSuffix}"
-      fi
-      if [ -e "$out/bin/${targetPrefix}ld.bfd${exeSuffix}" ]; then
-        ln -sf "${targetPrefix}ld.bfd${exeSuffix}" "$out/bin/ld.bfd${exeSuffix}"
-      fi
+      # `ld` plus every ld.* variant the wrap loop above produced (ld.bfd,
+      # ld.gold, ld.lld).  gold and lld matter as much as bfd: GHC bakes
+      # ("C compiler link flags","-fuse-ld=gold") into its settings file from
+      # its own native build, and collect2 resolves -fuse-ld=<v> by searching
+      # for a bare `ld.<v>` -- it never tries ${targetPrefix}ld.<v>.  With only
+      # the prefixed name present it reports the generic
+      # "collect2: fatal error: cannot find 'ld'", which surfaces as
+      # "C compiler cannot create executables" from the autoconf link probe and
+      # breaks every Haskell package carrying a configure script.
+      #
+      # Globbed rather than spelled out so this stays in step with that wrap
+      # loop, which wraps whatever ld.* variants the bintools actually ship.
+      for variant in "$out/bin/${targetPrefix}ld${exeSuffix}" \
+                     "$out/bin/${targetPrefix}"ld.*"${exeSuffix}"; do
+        [ -e "$variant" ] || continue
+        bare=''${variant##*/}
+        ln -sf "$bare" "$out/bin/''${bare#${targetPrefix}}"
+      done
   '';
 
   strictDeps = true;
