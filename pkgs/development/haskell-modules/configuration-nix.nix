@@ -1076,6 +1076,20 @@ builtins.intersectAttrs super {
   # Break dependency cycle between hedgehog, tasty-hedgehog and lifted-async
   lifted-async = dontCheck super.lifted-async;
 
+  # The Haskell builder passes --hsc2hs-option=--cross-compile for every cross
+  # build, and hsc2hs cannot evaluate #const_str in that mode:
+  #   src/Lua/Constants.hsc:107 directive const_str cannot be handled in
+  #   cross-compilation mode
+  # Upstream ships a cabal flag for exactly this case, which swaps the probed
+  # LUA_VERSION/LUA_RELEASE/LUA_COPYRIGHT strings for literals. Its own
+  # description notes those constants "may become inaccurate" as a result,
+  # which is why it stays off for native builds.
+  lua =
+    if pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform then
+      enableCabalFlag "cross-compile" super.lua
+    else
+      super.lua;
+
   # loc and loc-test depend on each other for testing. Break that infinite cycle:
   loc-test = super.loc-test.override { loc = dontCheck self.loc; };
 
