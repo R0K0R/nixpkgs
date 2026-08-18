@@ -1,0 +1,201 @@
+From d5f420450e86cedca819ca401b184917c6478c1a Mon Sep 17 00:00:00 2001
+From: Luite Stegeman <stegeman@gmail.com>
+Date: Thu, 17 Oct 2024 13:12:03 +0000
+Subject: [PATCH] Interpreter: Add locking for communication with external
+ interpreter
+
+This adds locking to communication with the external interpreter
+to prevent concurrent tasks interfering with each other. This
+fixes Template Haskell with the external interpreter in parallel (-j)
+builds.
+
+Fixes #25083
+---
+ compiler/GHC/Runtime/Interpreter.hs         |  2 +
+ compiler/GHC/Runtime/Interpreter/JS.hs      |  2 +
+ compiler/GHC/Runtime/Interpreter/Process.hs | 77 +++++++++++++++------
+ compiler/GHC/Runtime/Interpreter/Types.hs   |  1 +
+ compiler/GHC/Runtime/Interpreter/Wasm.hs    |  4 +-
+ testsuite/tests/th/T25083.hs                | 21 ++++++
+ testsuite/tests/th/T25083.stdout            |  2 +
+ testsuite/tests/th/T25083_A.hs              | 10 +++
+ testsuite/tests/th/T25083_B.hs              |  8 +++
+ testsuite/tests/th/all.T                    |  1 +
+ 10 files changed, 104 insertions(+), 24 deletions(-)
+ create mode 100644 testsuite/tests/th/T25083.hs
+ create mode 100644 testsuite/tests/th/T25083.stdout
+ create mode 100644 testsuite/tests/th/T25083_A.hs
+ create mode 100644 testsuite/tests/th/T25083_B.hs
+
+diff --git a/compiler/GHC/Runtime/Interpreter.hs b/compiler/GHC/Runtime/Interpreter.hs
+index 366edd322dd9..a0436e56ea04 100644
+--- a/compiler/GHC/Runtime/Interpreter.hs
++++ b/compiler/GHC/Runtime/Interpreter.hs
+@@ -578,10 +578,12 @@ spawnIServ conf = do
+                                           []
+                                           (iservConfOpts    conf)
+   lo_ref <- newIORef Nothing
++  lock <- newMVar ()
+   let pipe = Pipe { pipeRead = rh, pipeWrite = wh, pipeLeftovers = lo_ref }
+   let process = InterpProcess
+                   { interpHandle = ph
+                   , interpPipe   = pipe
++                  , interpLock   = lock
+                   }
+ 
+   pending_frees <- newMVar []
+diff --git a/compiler/GHC/Runtime/Interpreter/JS.hs b/compiler/GHC/Runtime/Interpreter/JS.hs
+index 276d9419be22..64b0d7ff3533 100644
+--- a/compiler/GHC/Runtime/Interpreter/JS.hs
++++ b/compiler/GHC/Runtime/Interpreter/JS.hs
+@@ -130,10 +130,12 @@ startTHRunnerProcess interp_js settings = do
+   std_in <- readIORef interp_in
+ 
+   lo_ref <- newIORef Nothing
++  lock <- newMVar ()
+   let pipe = Pipe { pipeRead = rh, pipeWrite = wh, pipeLeftovers = lo_ref }
+   let proc = InterpProcess
+               { interpHandle = hdl
+               , interpPipe   = pipe
++              , interpLock   = lock
+               }
+   pure (std_in, proc)
+ 
+diff --git a/compiler/GHC/Runtime/Interpreter/Process.hs b/compiler/GHC/Runtime/Interpreter/Process.hs
+index a93d00d7bc72..142fda006ac5 100644
+--- a/compiler/GHC/Runtime/Interpreter/Process.hs
++++ b/compiler/GHC/Runtime/Interpreter/Process.hs
+@@ -1,21 +1,18 @@
++{-# LANGUAGE LambdaCase #-}
+ module GHC.Runtime.Interpreter.Process
+   (
+-  -- * Low-level API
+-    callInterpProcess
+-  , readInterpProcess
+-  , writeInterpProcess
+-
+   -- * Message API
+-  , Message(..)
++    Message(..)
+   , DelayedResponse (..)
++  -- * Top-level message API (these acquire/release a lock)
+   , sendMessage
+   , sendMessageNoResponse
+   , sendMessageDelayedResponse
++  , receiveDelayedResponse
++  -- * Nested message API (these require the interpreter to already be locked)
+   , sendAnyValue
+   , receiveAnyValue
+-  , receiveDelayedResponse
+   , receiveTHMessage
+-
+   )
+ where
+ 
+@@ -31,45 +28,79 @@ import GHC.Utils.Exception as Ex
+ import Data.Binary
+ import System.Exit
+ import System.Process
++import Control.Concurrent.MVar (MVar, withMVar, takeMVar, putMVar, isEmptyMVar)
+ 
+ data DelayedResponse a = DelayedResponse
+ 
++-- -----------------------------------------------------------------------------
++-- Top-level Message API
++
+ -- | Send a message to the interpreter process that doesn't expect a response
++--   (locks the interpreter while sending)
+ sendMessageNoResponse :: ExtInterpInstance d -> Message () -> IO ()
+-sendMessageNoResponse i m = writeInterpProcess (instProcess i) (putMessage m)
++sendMessageNoResponse i m =
++  withLock i $ writeInterpProcess (instProcess i) (putMessage m)
+ 
+--- | Send a message to the interpreter that excepts a response
++-- | Send a message to the interpreter that expects a response
++--   (locks the interpreter while until the response is received)
+ sendMessage :: Binary a => ExtInterpInstance d -> Message a -> IO a
+-sendMessage i m = callInterpProcess (instProcess i) m
++sendMessage i m = withLock i $ callInterpProcess (instProcess i) m
+ 
+ -- | Send a message to the interpreter process whose response is expected later
+ --
+ -- This is useful to avoid forgetting to receive the value and to ensure that
+ -- the type of the response isn't lost. Use receiveDelayedResponse to read it.
++-- (locks the interpreter until the response is received using
++-- `receiveDelayedResponse`)
+ sendMessageDelayedResponse :: ExtInterpInstance d -> Message a -> IO (DelayedResponse a)
+ sendMessageDelayedResponse i m = do
++  lock i
+   writeInterpProcess (instProcess i) (putMessage m)
+   pure DelayedResponse
+ 
+--- | Send any value
++-- | Expect a delayed result to be received now
++receiveDelayedResponse :: Binary a => ExtInterpInstance d -> DelayedResponse a -> IO a
++receiveDelayedResponse i DelayedResponse = do
++  ensureLocked i
++  r <- readInterpProcess (instProcess i) get
++  unlock i
++  pure r
++
++-- -----------------------------------------------------------------------------
++-- Nested Message API
++
++-- | Send any value (requires locked interpreter)
+ sendAnyValue :: Binary a => ExtInterpInstance d -> a -> IO ()
+-sendAnyValue i m = writeInterpProcess (instProcess i) (put m)
++sendAnyValue i m = ensureLocked i >> writeInterpProcess (instProcess i) (put m)
+ 
+--- | Expect a value to be received
++-- | Expect a value to be received (requires locked interpreter)
+ receiveAnyValue :: ExtInterpInstance d -> Get a -> IO a
+-receiveAnyValue i get = readInterpProcess (instProcess i) get
++receiveAnyValue i get = ensureLocked i >> readInterpProcess (instProcess i) get
+ 
+--- | Expect a delayed result to be received now
+-receiveDelayedResponse :: Binary a => ExtInterpInstance d -> DelayedResponse a -> IO a
+-receiveDelayedResponse i DelayedResponse = readInterpProcess (instProcess i) get
+-
+--- | Expect a value to be received
++-- | Wait for a Template Haskell message (requires locked interpreter)
+ receiveTHMessage :: ExtInterpInstance d -> IO THMsg
+-receiveTHMessage i = receiveAnyValue i getTHMessage
+-
++receiveTHMessage i = ensureLocked i >> receiveAnyValue i getTHMessage
+ 
+ -- -----------------------------------------------------------------------------
+--- Low-level API
++
++getLock :: ExtInterpInstance d -> MVar ()
++getLock = interpLock . instProcess
++
++withLock :: ExtInterpInstance d -> IO a -> IO a
++withLock i f = withMVar (getLock i) (const f)
++
++lock :: ExtInterpInstance d -> IO ()
++lock i = takeMVar (getLock i)
++
++unlock :: ExtInterpInstance d -> IO ()
++unlock i = putMVar (getLock i) ()
++
++ensureLocked :: ExtInterpInstance d -> IO ()
++ensureLocked i =
++  isEmptyMVar (getLock i) >>= \case
++    False -> panic "ensureLocked: external interpreter not locked"
++    _     -> pure ()
++
+ 
+ -- | Send a 'Message' and receive the response from the interpreter process
+ callInterpProcess :: Binary a => InterpProcess -> Message a -> IO a
+diff --git a/compiler/GHC/Runtime/Interpreter/Types.hs b/compiler/GHC/Runtime/Interpreter/Types.hs
+index 8c92d5ea16e0..ca51d612c8e8 100644
+--- a/compiler/GHC/Runtime/Interpreter/Types.hs
++++ b/compiler/GHC/Runtime/Interpreter/Types.hs
+@@ -90,6 +90,7 @@ type WasmInterp = ExtInterpState WasmInterpConfig ()
+ data InterpProcess = InterpProcess
+   { interpPipe   :: !Pipe           -- ^ Pipe to communicate with the server
+   , interpHandle :: !ProcessHandle  -- ^ Process handle of the server
++  , interpLock   :: !(MVar ())      -- ^ Lock to prevent concurrent access to the stream
+   }
+ 
+ -- | Status of an external interpreter
