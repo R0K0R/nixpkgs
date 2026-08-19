@@ -702,6 +702,26 @@ stdenvNoCC.mkDerivation {
         ln -s "${buildCC}/bin/$binary" "$out/bin/$binary"
       fi
     done
+  ''
+
+  # Bare clang names in a clang wrapper link to our own prefixed wrapper. The
+  # F2 loop above cannot provide them: buildCC is the gcc wrapper, so its
+  # [ -e ] test never fires for clang* and probes like coreclr's
+  # `command -v clang` fell through this bin dir to the RAW clang further
+  # down PATH -- which compiles but links without the wrapper's -B wiring
+  # ("cannot find Scrt1.o", "cannot find -lgcc").
+  #
+  # These deliberately resolve to the HOST-targeting wrapper, not F2's
+  # build-platform rule: inside a clang stdenv, a bare `clang` probe means
+  # "the toolchain compiler" ($CC semantics), and there is no build clang
+  # wrapper in scope to follow F2 with anyway. The [ ! -e ] guard keeps F2's
+  # buildCC-provided name winning if one ever exists.
+  + optionalString (targetPrefix != "" && targetPlatform.config == hostPlatform.config && isClang) ''
+    for binary in clang clang++ clang-cpp; do
+      if [ -e "$out/bin/${targetPrefix}$binary" ] && [ ! -e "$out/bin/$binary" ]; then
+        ln -s "${targetPrefix}$binary" "$out/bin/$binary"
+      fi
+    done
   '';
 
   strictDeps = true;
