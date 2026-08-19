@@ -469,10 +469,17 @@ stdenv.mkDerivation {
     export DOTNET_GENERATE_ASPNET_CERTIFICATE=0
 
     # CLR_CC/CXX need to be set to stop the build system from using clang-11,
-    # which is unwrapped
+    # which is unwrapped. Resolve them via $CC/$CXX rather than the bare
+    # names: this stdenv's cc-wrapper exposes only target-prefixed names in
+    # cross builds, so `command -v clang` falls through the wrapper's bin dir
+    # to the raw clang further down PATH -- which compiles the CMake probe
+    # but links without the wrapper's -B wiring ("cannot find Scrt1.o",
+    # "cannot find -lgcc") and fails coreclr's configure. $CC/$CXX hold the
+    # wrapper's own name in both worlds (clang natively, <triple>-clang
+    # cross), and command -v turns it into the absolute path coreclr needs.
     version= \
-    CLR_CC=$(command -v clang) \
-    CLR_CXX=$(command -v clang++) \
+    CLR_CC=$(command -v "$CC") \
+    CLR_CXX=$(command -v "$CXX") \
       ./build.sh $buildFlags
 
     runHook postBuild
