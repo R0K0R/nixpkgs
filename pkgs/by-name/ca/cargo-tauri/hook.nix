@@ -1,8 +1,8 @@
 {
   lib,
   stdenv,
+  buildPackages,
   makeSetupHook,
-  cargo,
   cargo-tauri,
   rust,
   # The subdirectory of `target/` from which to copy the build artifacts
@@ -15,9 +15,18 @@ in
 makeSetupHook {
   name = "tauri-hook";
 
+  # cargo and cargo-tauri are executed during the consumer's build, so they
+  # must be BUILD platform tools. Taking them from the calling scope works
+  # natively (buildPackages == pkgs) but breaks cross builds reached through
+  # the `cargo-tauri.hook` passthru: passthru attributes bypass splicing, so
+  # the consumer gets the HOST instantiation of this hook, which would
+  # propagate host binaries -- unrunnable on a true-cross builder, and enough
+  # to trip cargo's cross-to-x86 meta.broken at evaluation time.
+  # cargo-tauri.gst-plugin below is different: a host gstreamer plugin whose
+  # path is baked into runtime wrappers, correctly from the host set.
   propagatedBuildInputs = [
-    cargo
-    cargo-tauri
+    buildPackages.cargo
+    buildPackages.cargo-tauri
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [
     cargo-tauri.gst-plugin
