@@ -106,8 +106,13 @@ mkWrapper type (
       makeWrapper
     ]
     ++ lib.optional stdenv.hostPlatform.isLinux autoPatchelfHook
+    # postPatch runs xmlstarlet for every sdk build, so it must be a BUILD
+    # platform tool. It used to be listed here only for Darwin and to ride in
+    # buildInputs otherwise, which happens to work natively (buildInputs land
+    # on PATH when build == host) but breaks any cross build of the sdk with
+    # "xmlstarlet: command not found" in patchPhase.
+    ++ lib.optional (type == "sdk") xmlstarlet
     ++ lib.optionals (type == "sdk" && stdenv.hostPlatform.isDarwin) [
-      xmlstarlet
       sigtool
     ];
 
@@ -117,7 +122,6 @@ mkWrapper type (
       icu
       libkrb5
       curl
-      xmlstarlet
     ]
     ++ lib.optional stdenv.hostPlatform.isLinux lttng-ust_2_12;
 
