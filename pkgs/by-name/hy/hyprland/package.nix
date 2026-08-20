@@ -100,6 +100,17 @@ customStdenv.mkDerivation (finalAttrs: {
     hash = "sha256-kzhNQmKtX7lH69fQTNYZckZgV35ZK3rs25/2W7FGlbQ=";
   };
 
+  patches = [
+    # Rotating via monitor rules leaves layer-shell clients (bar, wallpaper)
+    # at the previous orientation's dimensions: neither the soft nor the
+    # hard rule-apply path recomputes the logical m_size that
+    # arrangeLayersForMonitor uses (soft never did; hard computes it before
+    # the new transform is installed). One line, mirrors the hard path's own
+    # formula. Found live on an autorotating convertible -- see the patch
+    # header for the full mechanism.
+    ./monitor-soft-apply-logical-size.patch
+  ];
+
   postPatch = ''
     # Relax glaze dependency
     # FIXME: this shouldn't be needed once the upstream code will adopt it
