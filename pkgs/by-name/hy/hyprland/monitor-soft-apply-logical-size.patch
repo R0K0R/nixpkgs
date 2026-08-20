@@ -1,0 +1,35 @@
+Recompute the logical monitor size when a rule is soft-applied.
+
+applyMonitorRuleSoft handles transform-only rule changes (the rule
+comparison classifies transform as a soft prop), and it updates
+m_transform and m_transformedSize -- but never m_size, the logical size
+that arrangeLayersForMonitor sizes layer-shell surfaces from. The hard
+path has the same hole from the other side: applyMonitorRule computes
+m_size at the top from m_transform *before* calling
+applyMonitorRuleSoft, which is what installs the new transform -- so
+m_size is always one transform behind there too.
+
+Net effect: rotating an output through monitor rules (hl.monitor /
+monitorRuleMgr) rotates the display and windows, but every layer-shell
+client (bars, wallpaper) keeps the previous orientation's dimensions --
+a portrait screen with a landscape-width bar and a letterbox where the
+rest of the wallpaper should be. Verified live on 0.56.0: after a
+transform-1 rule apply, `hyprctl layers` still reports the landscape
+logical box for every layer while `hyprctl monitors` reports
+transform 1.
+
+One line: recompute m_size in the soft path from the same xfmd it
+already computes for m_transformedSize, mirroring applyMonitorRule's
+own formula. The hard path is fixed by the same line, since it calls
+the soft path after installing the rule.
+
+--- a/src/output/Monitor.cpp
++++ b/src/output/Monitor.cpp
+@@ -697,6 +697,7 @@ bool CMonitor::applyMonitorRuleSoft(Config::CMonitorRule&& pMonitorRule) {
+ 
+     Vector2D xfmd     = m_transform % 2 == 1 ? Vector2D{m_pixelSize.y, m_pixelSize.x} : m_pixelSize;
+     m_transformedSize = xfmd;
++    m_size            = (xfmd / m_scale).round();
+ 
+     if (m_createdByUser) {
+         CBox transformedBox = {0, 0, m_transformedSize.x, m_transformedSize.y};
