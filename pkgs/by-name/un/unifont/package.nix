@@ -2,6 +2,7 @@
   lib,
   stdenv,
   fetchurl,
+  buildPackages,
   perl,
   bdftopcf,
   bdf2psf,
@@ -9,7 +10,18 @@
 }:
 
 let
-  perlenv = perl.withPackages (ps: [ ps.GD ]);
+  # `perl` is spliced, so listing it directly in nativeBuildInputs would
+  # select the build-platform variant. `.withPackages` returns a plain
+  # derivation and drops that splice metadata, so the two environments have
+  # to be constructed separately -- otherwise nativeBuildInputs silently
+  # receives the host-platform env.
+  #
+  # The build runs bin/unihex2png (and friends) to generate glyphs, so it
+  # needs a perl that executes on the BUILD platform.
+  perlenvBuild = buildPackages.perl.withPackages (ps: [ ps.GD ]);
+  # Installed scripts in $bin keep perl shebangs, patched against the HOST
+  # platform, so the host env is still a genuine runtime dependency.
+  perlenvHost = perl.withPackages (ps: [ ps.GD ]);
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "unifont";
@@ -28,14 +40,14 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   nativeBuildInputs = [
-    perlenv
+    perlenvBuild
     bdftopcf
     bdf2psf
     imagemagick
   ];
 
   buildInputs = [
-    perlenv
+    perlenvHost
   ];
 
   makeFlags = [ "PREFIX=${placeholder "out"}" ];
