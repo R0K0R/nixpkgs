@@ -20,7 +20,7 @@ makeSetupHook {
     # We use the wrapProgram function.
     makeWrapper
   ]
-  ++ lib.optionals (isGraphical && stdenv.hostPlatform == stdenv.targetPlatform) [
+  ++ lib.optionals isGraphical [
     # TODO: remove this, packages should depend on GTK explicitly.
     gtk3
 
