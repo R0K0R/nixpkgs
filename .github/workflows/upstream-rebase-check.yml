@@ -53,6 +53,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Ensure the conflict label exists
+        # gh issue create --label errors on a label that doesn't exist yet; it
+        # does not create one. Issues were only just enabled on this fork, so
+        # it starts with GitHub's default seeded set (bug, enhancement, ...),
+        # not this one. --force makes this create-or-update, so it's safe to
+        # run unconditionally on every invocation rather than checking first.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$ISSUE_LABEL" --repo "$GITHUB_REPOSITORY" --force \
+            --color "B60205" \
+            --description "combined-fundamental no longer rebases cleanly onto upstream"
+
       - name: Attempt the rebase
         id: rebase
         run: |
