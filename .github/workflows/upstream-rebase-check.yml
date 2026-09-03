@@ -1,0 +1,143 @@
+name: Upstream rebase check
+
+# Personal-fork automation, unrelated to NixOS/nixpkgs' own CI in this same
+# directory. It answers one question daily: does `combined-fundamental` still
+# rebase cleanly onto upstream/nixos-unstable? If yes, a ready-to-use
+# `rebase-candidate` branch is (re)published. If no, an issue is opened or
+# updated naming exactly what collided, and the run is marked failed so it
+# also surfaces through GitHub's own "workflow run failed" notification.
+#
+# combined-fundamental is never pushed to by this workflow -- only the
+# disposable `rebase-candidate` branch is. Adopting a clean rebase into
+# combined-fundamental itself stays a manual decision.
+
+on:
+  schedule:
+    # Daily, off-peak and off the hour to avoid GitHub's cron traffic spike.
+    - cron: "17 5 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+# Guard against two runs racing to force-push rebase-candidate or edit the
+# same issue. Never cancel a run already in progress -- let it finish so its
+# conflict-or-not verdict is never half-written.
+concurrency:
+  group: upstream-rebase-check
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://github.com/NixOS/nixpkgs.git
+  UPSTREAM_BRANCH: nixos-unstable
+  BASE_BRANCH: combined-fundamental
+  CANDIDATE_BRANCH: rebase-candidate
+  ISSUE_LABEL: upstream-rebase-conflict
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ${{ env.BASE_BRANCH }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: git fetch "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Attempt the rebase
+        id: rebase
+        run: |
+          set +e
+          git switch -c rebase-attempt
+          git rebase FETCH_HEAD
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "conflict=true" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "Conflicting files:"
+            git diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/'
+            echo
+            echo "The commit that would not apply:"
+            echo '```'
+            git log -1 --format='%H %s%n%an <%ae>' REBASE_HEAD
+            echo '```'
+          } > conflict-report.md
+
+          git rebase --abort
+
+      - name: Push ${{ env.CANDIDATE_BRANCH }}
+        if: steps.rebase.outputs.conflict == 'false'
+        run: git push origin "rebase-attempt:$CANDIDATE_BRANCH" --force
+
+      - name: Find existing conflict issue
+        id: find_issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$ISSUE_LABEL" \
+            --state open --json number --jq '.[0].number // empty')
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update conflict issue
+        if: steps.rebase.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          upstream_sha=$(git rev-parse --short=12 FETCH_HEAD)
+          {
+            echo "Rebasing \`$BASE_BRANCH\` onto \`$UPSTREAM_BRANCH\` @ \`$upstream_sha\` no longer applies cleanly."
+            echo
+            cat conflict-report.md
+            echo
+            echo "Checked automatically by \`.github/workflows/upstream-rebase-check.yml\` on $(date -u +%FT%TZ)."
+            echo "To resolve: rebase \`$BASE_BRANCH\` locally, fix the conflict, force-push, then close this issue -- or let tomorrow's run auto-close it once the rebase is clean again."
+          } > issue-body.md
+
+          if [ -n "${{ steps.find_issue.outputs.number }}" ]; then
+            gh issue edit "${{ steps.find_issue.outputs.number }}" --repo "$GITHUB_REPOSITORY" --body-file issue-body.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "nixpkgs rebase conflict against $UPSTREAM_BRANCH" \
+              --label "$ISSUE_LABEL" --body-file issue-body.md
+          fi
+
+      - name: Close resolved conflict issue
+        if: steps.rebase.outputs.conflict == 'false' && steps.find_issue.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue close "${{ steps.find_issue.outputs.number }}" --repo "$GITHUB_REPOSITORY" \
+            --comment "Resolved: rebase onto $UPSTREAM_BRANCH now succeeds cleanly. See the \`$CANDIDATE_BRANCH\` branch."
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ steps.rebase.outputs.conflict }}" = "true" ]; then
+            echo "### :x: Rebase conflict" >> "$GITHUB_STEP_SUMMARY"
+            cat conflict-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### :white_check_mark: Rebases cleanly onto \`$UPSTREAM_BRANCH\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pushed to \`$CANDIDATE_BRANCH\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fail on conflict
+        if: steps.rebase.outputs.conflict == 'true'
+        run: |
+          echo "::error::$BASE_BRANCH no longer rebases cleanly onto $UPSTREAM_BRANCH -- see the opened issue."
+          exit 1
