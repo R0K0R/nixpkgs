@@ -1,5 +1,6 @@
 {
   stdenv,
+  buildPackages,
   fetchurl,
   fetchgit,
   fetchpatch2,
@@ -624,6 +625,32 @@ stdenv.mkDerivation (finalAttrs: {
     export QT6LIB=${kdeDepsLibs}/lib
     export KF6INC="${kdeDepsIncludes}/include ${kdeDepsIncludes}/include/KF6"
     export KF6LIB=${kdeDepsLibs}/lib
+
+    # moc has to come from the BUILD platform, and nothing else supplies it.
+    #
+    # configure looks for it in (configure.ac, "Check for Meta Object Compiler"):
+    #
+    #   `dirname $qt6_libdir`/libexec : $QT6DIR/libexec : $qt6_libexec_dirs
+    #     : $qt6_libdirs : $PATH
+    #
+    # Every entry but the last resolves inside the kdeDeps join above, which is
+    # built from HOST-platform Qt. A cross-built qtbase deliberately omits the
+    # compiled host tools -- its libexec ships only the arch-independent
+    # scripts (qt-cmake-private, qt_cyclonedx_generator.py, ...) and no moc,
+    # rcc or uic -- because they could not execute on the build machine
+    # anyway. So the search falls all the way through to $PATH and fails with
+    # "Qt Meta Object Compiler not found", even though qmake6 was located
+    # moments earlier: qmake6 comes from nativeBuildInputs, i.e. already the
+    # build-platform qtbase, whose libexec does have moc.
+    #
+    # Natively this never shows up, because host == build makes the join's
+    # libexec the very directory that holds moc.
+    #
+    # PATH rather than QT6DIR on purpose: setting QT6DIR takes a different
+    # branch at the top of the Qt6 block, where qmake is then looked up only
+    # under $QT6DIR/bin. Prepending to PATH feeds the existing last resort and
+    # leaves every other check exactly as it was.
+    export PATH="${buildPackages.qt6.qtbase.out}/libexec:$PATH"
   '';
 
   configureFlags = [
