@@ -14,6 +14,9 @@ name: Upstream rebase check
 on:
   schedule:
     # Daily, off-peak and off the hour to avoid GitHub's cron traffic spike.
+    # Expect it late regardless: the first real scheduled run fired at 09:40Z
+    # for a 05:17Z cron. GitHub delays scheduled workflows under load, so this
+    # is "daily, eventually", not "daily at 05:17".
     - cron: "17 5 * * *"
   workflow_dispatch: {}
 
@@ -29,6 +32,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  UPSTREAM_REPO: NixOS/nixpkgs
   UPSTREAM_URL: https://github.com/NixOS/nixpkgs.git
   UPSTREAM_BRANCH: nixos-unstable
   BASE_BRANCH: combined-fundamental
@@ -36,7 +40,103 @@ env:
   ISSUE_LABEL: upstream-rebase-conflict
 
 jobs:
+  # Is there anything to replay at all? One API call, no checkout.
+  #
+  # WHY THIS EXISTS. The check job needs the full nixpkgs history
+  # (fetch-depth: 0), which costs ~8 minutes before it can conclude anything.
+  # Measured on the first real scheduled run: upstream had not moved, git said
+  # "Current branch rebase-attempt is up to date", the push said "Everything
+  # up-to-date", and the whole 8 minutes bought a verdict that was knowable
+  # up front.
+  #
+  # STATE-FREE, deliberately. The obvious implementation records the last-seen
+  # upstream SHA somewhere -- a branch, a tag, an Actions cache -- and every
+  # one of those can drift out of sync with reality or be evicted, which is a
+  # second thing to debug at 05:17. GitHub's cross-fork compare already knows
+  # the answer without being told: behind_by counts exactly the upstream
+  # commits this branch does not have, which is exactly what a rebase would
+  # replay. Nothing to store, nothing to invalidate.
+  probe:
+    runs-on: ubuntu-latest
+    outputs:
+      behind: ${{ steps.compare.outputs.behind }}
+      ahead: ${{ steps.compare.outputs.ahead }}
+      base_sha: ${{ steps.compare.outputs.base_sha }}
+    steps:
+      - name: Compare against upstream
+        id: compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Compared in the UPSTREAM repo's namespace with head as
+          # owner:branch -- the documented cross-fork form. Comparing inside
+          # the fork instead would rely on an upstream SHA resolving there.
+          gh api "repos/$UPSTREAM_REPO/compare/$UPSTREAM_BRANCH...${GITHUB_REPOSITORY%%/*}:$BASE_BRANCH" \
+            > compare.json
+
+          behind=$(jq -r '.behind_by' compare.json)
+          ahead=$(jq -r '.ahead_by' compare.json)
+          status=$(jq -r '.status' compare.json)
+          mergebase=$(jq -r '.merge_base_commit.sha' compare.json)
+
+          {
+            echo "behind=$behind"
+            echo "ahead=$ahead"
+            echo "base_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BASE_BRANCH" --jq .commit.sha)"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Upstream comparison"
+            echo "- status: \`$status\`"
+            echo "- upstream commits to replay (behind_by): **$behind**"
+            echo "- local patches on top (ahead_by): $ahead"
+            echo "- current rebase base: \`${mergebase:0:12}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # behind_by == 0: upstream is already contained in the branch, so a rebase
+  # would replay nothing. That is not merely "skip" -- it is the CLEAN verdict,
+  # reached without a clone, so it owes the same two side effects the clean
+  # path owes: a candidate branch that matches, and no stale conflict issue.
+  #
+  # This is also what closes the loop when a conflict is fixed by hand: a
+  # manual rebase makes the branch contain upstream again, behind_by drops to
+  # 0, and the issue gets closed here rather than lingering.
+  up-to-date:
+    needs: probe
+    if: needs.probe.outputs.behind == '0' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Point ${{ env.CANDIDATE_BRANCH }} at ${{ env.BASE_BRANCH }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ needs.probe.outputs.base_sha }}
+        run: |
+          # Server-side ref update: no clone needed to move a branch to a
+          # commit the remote already has. Create it if this is the first run.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$CANDIDATE_BRANCH" \
+              -f sha="$BASE_SHA" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/heads/$CANDIDATE_BRANCH" -f sha="$BASE_SHA" >/dev/null
+          fi
+          echo "### :white_check_mark: Nothing to replay" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$BASE_BRANCH\` already contains \`$UPSTREAM_BRANCH\`; \`$CANDIDATE_BRANCH\` set to \`${BASE_SHA:0:12}\`." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Close resolved conflict issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$ISSUE_LABEL" \
+            --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" \
+              --comment "Resolved: \`$BASE_BRANCH\` now contains \`$UPSTREAM_BRANCH\`, so there is nothing left to replay."
+          fi
+
   check:
+    needs: probe
+    if: needs.probe.outputs.behind != '0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ${{ env.BASE_BRANCH }}
@@ -119,7 +219,7 @@ jobs:
             cat conflict-report.md
             echo
             echo "Checked automatically by \`.github/workflows/upstream-rebase-check.yml\` on $(date -u +%FT%TZ)."
-            echo "To resolve: rebase \`$BASE_BRANCH\` locally, fix the conflict, force-push, then close this issue -- or let tomorrow's run auto-close it once the rebase is clean again."
+            echo "To resolve: rebase \`$BASE_BRANCH\` locally, fix the conflict, force-push, then close this issue -- or let a later run auto-close it once the rebase is clean again."
           } > issue-body.md
 
           if [ -n "${{ steps.find_issue.outputs.number }}" ]; then
