@@ -90,6 +90,8 @@ stdenv.mkDerivation {
     unzip
     yq
     installShellFiles
+    # this gets copied into the tree, but we still need the sandbox profile
+    bootstrapSdk
   ]
   ++ lib.optionals (lib.versionAtLeast version "9") [
     nodejs
@@ -105,8 +107,6 @@ stdenv.mkDerivation {
   ];
 
   buildInputs = [
-    # this gets copied into the tree, but we still need the sandbox profile
-    bootstrapSdk
     # the propagated build inputs in llvm.dev break swift compilation
     llvmPackages.llvm.out
     zlib
