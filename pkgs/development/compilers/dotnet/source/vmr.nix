@@ -90,6 +90,8 @@ stdenv.mkDerivation {
     unzip
     yq
     installShellFiles
+    # this gets copied into the tree, but we still need the sandbox profile
+    bootstrapSdk
   ]
   ++ lib.optionals (lib.versionAtLeast version "9") [
     nodejs
@@ -105,8 +107,6 @@ stdenv.mkDerivation {
   ];
 
   buildInputs = [
-    # this gets copied into the tree, but we still need the sandbox profile
-    bootstrapSdk
     # the propagated build inputs in llvm.dev break swift compilation
     llvmPackages.llvm.out
     zlib
@@ -393,10 +393,6 @@ stdenv.mkDerivation {
       chmod -R +w .dotnet
     ''
     + lib.optionalString (lib.versionAtLeast version "10") ''
-      # Full path, as for the --version probe above: bootstrapSdk sits in
-      # buildInputs (its Darwin sandbox profile is needed there), which only
-      # reaches PATH when build == host. In cross builds a bare `dotnet` dies
-      # with "dotnet: command not found" in configurePhase.
       ${bootstrapSdk}/bin/dotnet nuget add source "${bootstrapSdk.artifacts}"
     ''
     + ''
