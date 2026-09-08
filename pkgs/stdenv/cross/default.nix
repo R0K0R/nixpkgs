@@ -69,6 +69,17 @@ lib.init bootStages
                 meta.license = lib.licenses.mit;
               } ../../build-support/setup-hooks/cmake-intra-isa-cross.sh
             )
+            # Intra-ISA cross PATH fix: host and build share a config triple, so a
+            # package that names buildPackages.stdenv.cc in depsBuildBuild gets
+            # the BUILD platform's unwrapped compiler for <triple>-gcc, ahead of
+            # its own wrapper. Same injection mechanism and guard as the cmake
+            # hook above; see the hook for why it cannot live in setup.sh.
+            ++ lib.optional (hostPlatform != buildPlatform && hostPlatform.config == buildPlatform.config) (
+              buildPackages.makeSetupHook {
+                name = "cc-intra-isa-cross-hook";
+                meta.license = lib.licenses.mit;
+              } ../../build-support/setup-hooks/cc-intra-isa-cross.sh
+            )
             ++ lib.optionals (hostPlatform.isLinux && !buildPlatform.isLinux) [ buildPackages.patchelf ]
             ++ lib.optional (
               let
