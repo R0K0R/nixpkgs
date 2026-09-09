@@ -49,8 +49,12 @@ stdenv.mkDerivation (finalAttrs: {
       --replace "/usr/local/etc/zoneinfo" ""
   ''
   + lib.optionalString (stdenv.buildPlatform != stdenv.hostPlatform) ''
-    substituteInPlace unix/configure unix/configure.in \
-      --replace-fail '`uname -s`' '${stdenv.hostPlatform.uname.system}'
+      # 8.6 ships unix/configure.in; 9.0 renamed it to unix/configure.ac.
+      for f in unix/configure unix/configure.in unix/configure.ac; do
+        [ -e "$f" ] || continue
+        substituteInPlace "$f" \
+          --replace-fail '`uname -s`' '${stdenv.hostPlatform.uname.system}'
+      done
   ''
   # A shared Cygwin build tries to configure the windows build system
   # to separately build these DLLs so it can load them later. That's
