@@ -1741,11 +1741,21 @@ with haskellLib;
   # Test suite `readme` does not compile.
   # https://github.com/haskell-party/feed/issues/77
   # `readme-doctests` are also broken (can't find a variety of imports)
-  feed = overrideCabal {
-    buildTarget = "tests";
+  #
+  # buildTarget = "tests" limits the build to the working suite, which only
+  # makes sense while tests are enabled. When doCheck is off -- the default
+  # whenever buildPlatform != hostPlatform -- configure omits --enable-tests,
+  # the component does not exist, and `Setup build tests` fails with
+  # "Cannot process the test suite 'tests' because test suites are not
+  # enabled" [Cabal-4733]. The broken suites are not configured then either,
+  # so the default target (the library) is the right one.
+  feed = overrideCabal (drv: {
+    buildTarget = lib.optionalString (
+      drv.doCheck or (pkgs.stdenv.buildPlatform == pkgs.stdenv.hostPlatform)
+    ) "tests";
     testTargets = [ "tests" ];
     jailbreak = true;
-  } super.feed;
+  }) super.feed;
 
   # 2026-04-14: Apache Iceberg not included in pkgs.duckdb and not packaged
   beam-duckdb = overrideCabal (drv: {
