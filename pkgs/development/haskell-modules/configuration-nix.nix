@@ -1249,21 +1249,23 @@ builtins.intersectAttrs super {
   git-annex =
     let
       # Executables git-annex needs at runtime. git-annex detects these at configure
-      # time and expects to be able to execute them. This means that cross-compiling
-      # git-annex is not possible and strictDeps must be false (runtimeExecDeps go
-      # into executableSystemDepends/buildInputs).
-      runtimeExecDeps = [
-        pkgs.bup
-        pkgs.curl
-        pkgs.git
-        pkgs.gnupg
-        pkgs.lsof
-        pkgs.openssh
-        pkgs.perl
-        pkgs.rsync
-        pkgs.wget
-        pkgs.which
+      # time and expects to be able to execute them, so strictDeps must be false
+      # (runtimeExecDeps go into executableSystemDepends/buildInputs). Cross-compiling
+      # is only possible when the host can execute build-platform binaries; see
+      # buildTools below.
+      runtimeExecDepsFor = ps: [
+        ps.bup
+        ps.curl
+        ps.git
+        ps.gnupg
+        ps.lsof
+        ps.openssh
+        ps.perl
+        ps.rsync
+        ps.wget
+        ps.which
       ];
+      runtimeExecDeps = runtimeExecDepsFor pkgs;
     in
     overrideCabal
       (drv: {
@@ -1339,6 +1341,19 @@ builtins.intersectAttrs super {
         buildTools = [
           pkgs.buildPackages.makeWrapper
         ]
+        # configure runs each runtimeExecDep (`git --version`, `rsync --version`,
+        # ...), and in a cross build the host copies are not on PATH, so it aborts
+        # at "checking git... no". Give configure build-platform copies of the
+        # same set to probe instead. Most probes only record availability, plus
+        # git's version string, which is the same for both; lsof is recorded by
+        # path, so the built git-annex refers to the build platform's lsof. That
+        # is only sound when the host can run build-platform binaries -- e.g. a
+        # CPU-tuned host (-march) built on a generic machine of the same arch --
+        # hence the gate. A true cross build still fails as before.
+        ++ lib.optionals (
+          pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform
+          && pkgs.stdenv.hostPlatform.canExecute pkgs.stdenv.buildPlatform
+        ) (runtimeExecDepsFor pkgs.buildPackages)
         ++ (drv.buildTools or [ ]);
 
         # Git annex provides a restricted login shell. Setting
