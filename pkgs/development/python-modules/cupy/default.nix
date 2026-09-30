@@ -113,7 +113,21 @@ buildPythonPackage.override { stdenv = cudaPackages.backendStdenv; } (finalAttrs
       # Fake libcuda.so (the real one is deployed impurely)
       "-L${lib.getOutput "stubs" cudaPackages.cuda_cudart}/lib/stubs"
     ];
-  };
+  }
+  # The build (install/cupy_builder) finds nvcc via $NVCC, else PATH -- and PATH has the
+  # build platform's nvcc, whose host compiler reads build-side flags and so cannot see this
+  # package's CUDA headers ("cuda_runtime.h: No such file or directory"). For a cross build
+  # within one triple (build and host differ only by e.g. gcc.arch), the host nvcc -- NVIDIA's
+  # generic binary, the same one postPatch hardcodes for runtime -- runs on the build machine,
+  # so use it. canExecute cannot express this: it is false for generic -> -march=<cpu>.
+  // lib.optionalAttrs
+    (
+      cudaPackages.backendStdenv.buildPlatform != cudaPackages.backendStdenv.hostPlatform
+      && cudaPackages.backendStdenv.buildPlatform.config == cudaPackages.backendStdenv.hostPlatform.config
+    )
+    {
+      NVCC = lib.getExe cudaPackages.cuda_nvcc;
+    };
 
   # See https://docs.cupy.dev/en/v10.2.0/reference/environment.html. Setting both
   # CUPY_NUM_BUILD_JOBS and CUPY_NUM_NVCC_THREADS to NIX_BUILD_CORES results in
