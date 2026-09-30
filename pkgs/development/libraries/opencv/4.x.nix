@@ -593,6 +593,15 @@ effectiveStdenv.mkDerivation {
   ++ optionals (!effectiveStdenv.hostPlatform.isDarwin) [
     (cmakeOptionType "path" "OPENCL_LIBRARY" "${ocl-icd}/lib/libOpenCL.so")
   ]
+  # When cross-compiling OpenCV will not run python to find these, and without them it
+  # silently leaves out the python3 module: cv2 installs only its pure-python loader and
+  # `import cv2` fails ("missing configuration file: config-3.x.py"). The build succeeds
+  # regardless, since pythonImportsCheck does not run when cross-compiling.
+  ++ optionals (enablePython && effectiveStdenv.buildPlatform != effectiveStdenv.hostPlatform) [
+    (cmakeOptionType "path" "PYTHON3_INCLUDE_PATH" "${pythonPackages.python}/include/${pythonPackages.python.libPrefix}")
+    (cmakeOptionType "filepath" "PYTHON3_LIBRARIES" "${pythonPackages.python}/lib/lib${pythonPackages.python.libPrefix}${effectiveStdenv.hostPlatform.extensions.sharedLibrary}")
+    (cmakeOptionType "path" "PYTHON3_NUMPY_INCLUDE_DIRS" pythonPackages.numpy.coreIncludeDir)
+  ]
   ++ optionals enablePython [
     (cmakeOptionType "path" "OPENCV_PYTHON_INSTALL_PATH" pythonPackages.python.sitePackages)
   ]
