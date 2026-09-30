@@ -112,6 +112,18 @@ let
   stdenv = throw "Use effectiveStdenv instead";
   effectiveStdenv = if enableCuda then cudaPackages.backendStdenv else inputs.stdenv;
 
+  # A cross build within one triple (build and host differ only by e.g. gcc.arch). The CUDA
+  # setup hook arrives from nativeBuildInputs' nvcc -- the BUILD platform's -- and points
+  # CMake at that nvcc and its backendStdenv compiler, which reads build-side flags and cannot
+  # see this package's host CUDA headers. OpenCV's CUDA detection then fails and it silently
+  # builds without CUDA ("NVIDIA CUDA: NO"), which only surfaces at postInstall. Here the host
+  # nvcc (NVIDIA's generic binary) and host compiler run on the build machine, so use them.
+  cudaIntraIsaCross =
+    enableCuda
+    && effectiveStdenv.buildPlatform != effectiveStdenv.hostPlatform
+    && effectiveStdenv.buildPlatform.config == effectiveStdenv.hostPlatform.config;
+  cudaHostCxx = "${cudaPackages.backendStdenv.cc}/bin/${cudaPackages.backendStdenv.cc.targetPrefix}c++";
+
   src = fetchFromGitHub {
     owner = "opencv";
     repo = "opencv";
@@ -487,6 +499,12 @@ effectiveStdenv.mkDerivation {
     # Configure can't find the library without this.
     OpenBLAS_HOME = optionalString withOpenblas openblas_.dev;
     OpenBLAS = optionalString withOpenblas openblas_;
+  }
+  // lib.optionalAttrs cudaIntraIsaCross {
+    # Keep the hook from appending its build-platform compiler flags after ours (CMake takes
+    # the last -D); the one other thing that step sets, fatbin compression, is kept here.
+    dontSetupCUDAToolkitCompilers = "1";
+    NVCC_PREPEND_FLAGS = "-Xfatbin=-compress-all";
   };
 
   cmakeFlags = [
@@ -547,6 +565,15 @@ effectiveStdenv.mkDerivation {
     (cmakeFeature "CUDA_ARCH_PTX" (last cudaCapabilities))
 
     (cmakeOptionType "path" "NVIDIA_OPTICAL_FLOW_2_0_HEADERS_PATH" nvidia-optical-flow-sdk.outPath)
+  ]
+  ++ optionals cudaIntraIsaCross [
+    # CMake's FindCUDA searches only CUDA_TOOLKIT_ROOT_DIR when CMAKE_CROSSCOMPILING, never
+    # the default paths where nixpkgs' split CUDA outputs are found, so cudart is not found
+    # and CUDA is silently disabled. Give it the merged toolkit as that single root.
+    (cmakeFeature "CUDA_TOOLKIT_ROOT_DIR" "${cudaPackages.cudatoolkit}")
+    (cmakeFeature "CUDA_NVCC_EXECUTABLE" (lib.getExe cudaPackages.cuda_nvcc))
+    (cmakeFeature "CUDA_HOST_COMPILER" cudaHostCxx)
+    (cmakeFeature "CMAKE_CUDA_HOST_COMPILER" cudaHostCxx)
   ]
   ++ optionals effectiveStdenv.hostPlatform.isDarwin [
     (cmakeBool "WITH_OPENCL" false)
