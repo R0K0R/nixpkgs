@@ -30,9 +30,13 @@ stdenv.mkDerivation (finalAttrs: {
   # to the same location.
   # `$(LN_S) $(notdir $(DOCDIR)) $(DOCLINK)` effectively running:
   # `ln -s wcslib $out/share/doc/wcslib`
-  # This produces a broken link because the target location already exists
+  # This produces a broken link because the target location already exists.
+  # When the stdenv's docdir is named differently from DOCLINK -- for a cross
+  # build it carries the host triple (share/doc/wcslib-<triple>) -- the link
+  # instead lands at share/doc/wcslib, pointing at the real directory, and
+  # there is nothing broken to remove.
   postInstall = ''
-    rm $out/share/doc/wcslib/wcslib
+    rm -f $out/share/doc/wcslib/wcslib
   '';
 
   meta = {
