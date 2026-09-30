@@ -1,5 +1,6 @@
 {
   lib,
+  config,
   buildPythonPackage,
   cudaPackages,
   fetchFromGitHub,
@@ -113,6 +114,16 @@ buildPythonPackage.override { stdenv = cudaPackages.backendStdenv; } (finalAttrs
       # Fake libcuda.so (the real one is deployed impurely)
       "-L${lib.getOutput "stubs" cudaPackages.cuda_cudart}/lib/stubs"
     ];
+  }
+  # CuPy compiles its kernels for its own built-in list of GPU generations unless
+  # CUPY_NVCC_GENERATE_CODE says otherwise, so an explicit nixpkgs cudaCapabilities was
+  # ignored and every kernel was still built for sm_50..sm_90. Same pairs as the gencode
+  # flags, in CuPy's `;`-separated form. Only when set explicitly, so the default build
+  # keeps CuPy's own list.
+  // lib.optionalAttrs ((config.cudaCapabilities or [ ]) != [ ]) {
+    CUPY_NVCC_GENERATE_CODE = lib.concatMapStringsSep ";" (
+      lib.removePrefix "-gencode="
+    ) cudaPackages.flags.gencode;
   };
 
   # See https://docs.cupy.dev/en/v10.2.0/reference/environment.html. Setting both
