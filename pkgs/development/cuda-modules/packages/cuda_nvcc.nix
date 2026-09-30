@@ -152,18 +152,44 @@ buildRedist (finalAttrs: {
       # Add the dependency on backendStdenv.cc to the nvcc.profile.
       # NOTE: NVCC explodes in horrifying fashion if GCC is not on PATH -- it fails even before
       # reading nvcc.profile!
-      + ''
-        nixLog "setting compiler-bindir to backendStdenv.cc in nvcc.profile"
-        cat << EOF >> "''${!outputBin:?}/bin/nvcc.profile"
-        # Fix a compatible backend compiler
-        compiler-bindir = ${backendStdenv.cc}/bin
-        EOF
+      #
+      # nvcc runs the bare names `gcc`/`g++` from compiler-bindir. A cross wrapper only provides
+      # them with its target prefix, so when backendStdenv.cc has one, point compiler-bindir at a
+      # directory of bare names linked to the prefixed (host-targeting) wrappers. Otherwise nvcc
+      # falls through to whatever `gcc` is on PATH: the build platform's compiler, which may be a
+      # version nvcc rejects ("gcc versions later than 14 are not supported") and which reads the
+      # build platform's flags, so propagated host include paths such as CCCL's go missing.
+      + (
+        let
+          prefix = backendStdenv.cc.targetPrefix;
+          hostCompilerBin = if prefix == "" then "${backendStdenv.cc}/bin" else "\${!outputBin:?}/nvcc-host-compiler/bin";
+        in
+        lib.optionalString (prefix != "") ''
+          nixLog "mirroring backendStdenv.cc/bin with bare names bound to its ${prefix} wrappers"
+          mkdir -p "${hostCompilerBin}"
+          # Everything the wrapper provides, so a prefixed -ccbin (NCCL passes $CXX) still resolves.
+          for f in "${backendStdenv.cc}/bin/"*; do
+            ln -s "$f" "${hostCompilerBin}/''${f##*/}"
+          done
+          for name in gcc g++ cc c++ cpp; do
+            if [[ -e "${backendStdenv.cc}/bin/${prefix}$name" ]]; then
+              ln -sfn "${backendStdenv.cc}/bin/${prefix}$name" "${hostCompilerBin}/$name"
+            fi
+          done
+        ''
+        + ''
+          nixLog "setting compiler-bindir to backendStdenv.cc in nvcc.profile"
+          cat << EOF >> "''${!outputBin:?}/bin/nvcc.profile"
+          # Fix a compatible backend compiler
+          compiler-bindir = ${hostCompilerBin}
+          EOF
 
-        nixLog "wrapping nvcc to add backendStdenv.cc to its PATH"
-        wrapProgramBinary \
-          "''${!outputBin:?}/bin/nvcc" \
-          --prefix PATH : ${lib.makeBinPath [ backendStdenv.cc ]}
-      ''
+          nixLog "wrapping nvcc to add backendStdenv.cc to its PATH"
+          wrapProgramBinary \
+            "''${!outputBin:?}/bin/nvcc" \
+            --prefix PATH : ${lib.optionalString (prefix != "") "${hostCompilerBin}:"}${lib.makeBinPath [ backendStdenv.cc ]}
+        ''
+      )
       # Fix compatibility with glibc 2.42:
       # The cospi|sinpi|rsqrt function signatures in include/common/math_functions.h do not match
       # glibc 2.42's.
