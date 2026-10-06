@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   fetchurl,
   meson,
   ninja,
@@ -93,7 +94,14 @@ stdenv.mkDerivation (finalAttrs: {
     pkg-config
     check
     wayland-scanner
-  ];
+  ]
+  # When cross-compiling, efl's meson looks up its own code generators as NATIVE
+  # programs (find_program(..., native: true): eolian_gen, eolian_cxx, edje_cc,
+  # edje_codegen, eet, elementary_codegen, elm_prefs_cc) instead of running the
+  # ones it just built. Supply them from the build platform's efl.
+  ++ lib.optional (
+    stdenv.buildPlatform != stdenv.hostPlatform
+  ) buildPackages.enlightenment.efl;
 
   buildInputs = [
     fontconfig
