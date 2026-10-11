@@ -7,7 +7,11 @@
   meson,
   ninja,
   hotdoc,
-  buildDevDoc ? true,
+  # The docs run tools/generate_md_opcodes_table, built for the host, at build
+  # time: without an exe wrapper that fails any build whose build platform
+  # cannot execute host binaries ("An exe_wrapper is needed for
+  # .../generate_md_opcodes_table").
+  buildDevDoc ? stdenv.buildPlatform.canExecute stdenv.hostPlatform,
 
   # for passthru.tests
   gnuradio,
