@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   fetchFromGitHub,
   versionCheckHook,
   boost,
@@ -88,11 +89,50 @@ in
 
       passthru.tests.pkg-config = testers.testMetaPkgConfig nixf;
 
+      # PrimOpsInfo.cpp is the output of a program linked against nix-expr. When this
+      # platform can't run the host's binaries, it is generated with the build platform's
+      # nix-expr instead: the primop table doesn't depend on the CPU, and an emulator
+      # need not implement every host instruction (qemu's TCG has no GFNI, which gcc
+      # emits for -march=meteorlake, e.g. in Boost.URL).
+      passthru.primOpsInfo = buildPackages.callPackage (
+        {
+          stdenv,
+          pkg-config,
+          nixVersions,
+        }:
+        stdenv.mkDerivation {
+          pname = "nixf-primops-info";
+          inherit (common) version src;
+          sourceRoot = "${common.src.name}/libnixf/src";
+          strictDeps = true;
+          nativeBuildInputs = [ pkg-config ];
+          buildInputs = [ nixVersions.latest.libs.nix-expr ];
+          buildPhase = ''
+            runHook preBuild
+            $CXX -std=gnu++20 Basic/PrimOpsInfoGen.cpp -o PrimOpsInfoGen $(pkg-config --cflags --libs nix-expr)
+            ./PrimOpsInfoGen PrimOpsInfo.cpp
+            runHook postBuild
+          '';
+          installPhase = ''
+            runHook preInstall
+            cp PrimOpsInfo.cpp $out
+            runHook postInstall
+          '';
+        }
+      ) { };
+
       meta = common.meta // {
         description = "Nix language frontend, parser & semantic analysis";
         mainProgram = "nixf-tidy";
         pkgConfigModules = [ "nixf" ];
       };
+    }
+    // lib.optionalAttrs (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) {
+      postPatch = ''
+        substituteInPlace src/meson.build \
+          --replace-fail "command: [ prim_ops_info_gen,  '@OUTPUT@' ]," \
+                         "command: [ 'cp', '${nixf.primOpsInfo}', '@OUTPUT@' ],"
+      '';
     }
   );
 
