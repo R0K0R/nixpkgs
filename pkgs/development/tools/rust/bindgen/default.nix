@@ -10,7 +10,8 @@
 let
   clang = rust-bindgen-unwrapped.clang;
   targetFlag =
-    if (!lib.systems.equals stdenv.targetPlatform stdenv.hostPlatform) then
+    # Only when the triples differ; see rust-bindgen-hook in build-support/rust/hooks.
+    if stdenv.targetPlatform.config != stdenv.hostPlatform.config then
       "--target=${stdenv.targetPlatform.config}"
     else
       "";
