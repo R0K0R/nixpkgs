@@ -69,8 +69,15 @@ stdenv.mkDerivation (finalAttrs: {
     })
   ];
 
+  # The gcc version regex only knows 3.x to 5.x. Newer gcc falls back to parsing the
+  # whole `--version` line, which breaks on a target-prefixed compiler: the digits of
+  # "x86_64-unknown-linux-gnu-gcc" are read as the version and MATH fails.
+  postPatch = ''
+    substituteInPlace src/shared/cmake/MacroCheckGccVisibility.cmake \
+      --replace-fail '"[345]\\.[0-9]\\.[0-9]"' '"[0-9]+\\.[0-9]+\\.[0-9]+"'
+  ''
   # see https://github.com/macports/macports-ports/commit/236d43f2450c6be52dc42fd3a2bbabbaa5136201
-  postPatch = lib.optionalString stdenv.hostPlatform.isDarwin ''
+  + lib.optionalString stdenv.hostPlatform.isDarwin ''
     substituteInPlace src/shared/CMakeLists.txt --replace 'fstati64;_fstati64;fstat64;fstat;_fstat' 'fstat;_fstat'
     substituteInPlace src/shared/CMakeLists.txt --replace 'stati64;_stati64;stat64;stat;_stat' 'stat;_stat'
   '';
