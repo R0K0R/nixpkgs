@@ -15,6 +15,21 @@ in
 }:
 
 let
+  # The cache is keyed by architecture, so it is made by the host's fc-cache, under an
+  # emulator when the build platform can't run it. With the same triple and fontconfig
+  # version, the build platform's fc-cache writes the same cache: there it is used
+  # instead of the emulator, which need not implement every host instruction (qemu's
+  # TCG has no GFNI, which gcc emits for -march=meteorlake, e.g. in freetype).
+  fcCache =
+    if
+      !stdenv.buildPlatform.canExecute stdenv.hostPlatform
+      && stdenv.buildPlatform.config == stdenv.hostPlatform.config
+      && buildPackages.fontconfig.version == fontconfig.version
+    then
+      lib.getExe' buildPackages.fontconfig "fc-cache"
+    else
+      "${stdenv.hostPlatform.emulator buildPackages} ${lib.getExe' fontconfig "fc-cache"}";
+
   fontDirsPath = writeText "font-dirs" ''
     <!-- Font directories -->
     ${lib.concatStringsSep "\n" (map (font: "<dir>${font}</dir>") fontDirectories)}
@@ -42,7 +57,7 @@ runCommand "fc-cache"
     # We must invoke the host `fc-cache` (not the build fontconfig) if we want
     # the cache to be usable by the host.
     mkdir -p $out
-    ${stdenv.hostPlatform.emulator buildPackages} ${lib.getExe' fontconfig "fc-cache"} -sv
+    ${fcCache} -sv
 
     # This is not a cache dir in the normal sense -- it won't be automatically
     # recreated.
