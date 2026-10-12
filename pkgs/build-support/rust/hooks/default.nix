@@ -169,8 +169,12 @@
     substitutions = {
       libclang = (lib.getLib clang.cc);
       inherit clang;
+      # Only when the triples differ: with the same triple the flag names libclang's
+      # default target anyway, and bindgen appends these args after the caller's own,
+      # so it would override a deliberate `-target bpf` (scx) whenever the platforms
+      # differ in something else, e.g. gcc.arch.
       targetFlag = lib.optionalString (
-        !lib.systems.equals stdenv.targetPlatform stdenv.hostPlatform
+        stdenv.targetPlatform.config != stdenv.hostPlatform.config
       ) "--target=${stdenv.targetPlatform.config}";
     };
     meta.license = lib.licenses.mit;
