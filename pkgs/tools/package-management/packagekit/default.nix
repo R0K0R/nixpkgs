@@ -73,7 +73,11 @@ stdenv.mkDerivation (finalAttrs: {
     docbook_xml_dtd_42
     libxml2
     ninja
-  ];
+  ]
+  # tests/runner/setup-test-root.py runs at build time (tests/test-root), and
+  # patchShebangs only finds a python3 on PATH, which a host buildInput is not when
+  # cross-compiling.
+  ++ lib.optional (!lib.systems.equals stdenv.buildPlatform stdenv.hostPlatform) python3;
 
   mesonFlags = [
     (lib.mesonBool "systemd" enableSystemd)
