@@ -84,6 +84,21 @@ let
             });
       };
 
+  # A feature band is built with the 1xx SDK, which it runs (the --version probe, the
+  # .dotnet copy). When the build platform can't run the host's code but has the same
+  # RID -- the platforms differ in e.g. gcc.arch -- that is stage 0's SDK: the same
+  # release built for the build platform, with its artifacts, which serve the host RID
+  # as well. Otherwise the host's 1xx SDK, as before.
+  featureBandBootstrapSdk =
+    if
+      !stdenvNoCC.buildPlatform.canExecute stdenvNoCC.hostPlatform
+      && stdenvNoCC.buildPlatform.system == stdenvNoCC.hostPlatform.system
+      && vmr ? stage0
+    then
+      vmr.stage0.sdk
+    else
+      vmrPackages.sdk;
+
   fallbackSdk = binary.${"sdk_${suffix.sdk}"};
   fallbackTargetPackages = fallbackSdk.targetPackages;
 
@@ -206,7 +221,7 @@ in
             inherit featureBand;
             dir = dir + "/${featureBand}";
             withBinary = false;
-            bootstrapSdk = vmrPackages.sdk;
+            bootstrapSdk = featureBandBootstrapSdk;
           }
         )
       )
