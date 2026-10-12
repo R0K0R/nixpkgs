@@ -101,6 +101,12 @@ let
 
   disableBootstrap = !stdenv.hostPlatform.isDarwin && !profiledCompiler;
 
+  intraIsaCrossHost = !buildIsHost && stdenv.buildPlatform.config == stdenv.hostPlatform.config;
+  # The ISA baseline (lib/systems/parse.nix: x86-64, armv8-a, ...), not the build
+  # platform's gcc.arch: a bootstrapped stage 3 is compiled by the new gcc itself
+  # with no -march, whatever CPU builds it.
+  isaBaselineMarch = stdenv.hostPlatform.parsed.cpu.arch or null;
+
   inherit (stdenv) buildPlatform hostPlatform targetPlatform;
   targetConfig = if (!hostIsTarget) then targetPlatform.config else null;
 
@@ -383,9 +389,20 @@ pipe
         NIX_LDFLAGS = optionalString hostPlatform.isSunOS "-lm";
 
         # Override isysroot for GNAT on Darwin due to SDK version sensitivity; GNAT 14+ requires Apple SDK 15 or later.
-        NIX_CFLAGS_COMPILE = optionalString (
-          hostPlatform.isDarwin && langAda
-        ) "-isysroot ${appleSdk.sdkroot}";
+        NIX_CFLAGS_COMPILE =
+          optionalString (hostPlatform.isDarwin && langAda) "-isysroot ${appleSdk.sdkroot}"
+          # Intra-ISA cross (build and host share a triple but differ, e.g. in
+          # gcc.arch): configure sees a native build, so the xgcc it builds is
+          # RUN on the build machine to compile the target libraries, and it is
+          # never bootstrapped (buildFlags needs buildIsHost). The cc-wrapper
+          # still compiles the compiler's own sources with the HOST's -march,
+          # which a bootstrapped stage 3 never gets. Build them for the ISA
+          # baseline instead, as stage 3 would be: with gcc 16.2 compiling
+          # itself at -march=meteorlake, the resulting cc1 failed an internal
+          # check in expand_vec_perm_1 (i386-expand.cc) while building
+          # libgfortran's matmul_i1_avx2; the same sources at -march=x86-64
+          # build cleanly.
+          + optionalString (intraIsaCrossHost && isaBaselineMarch != null) " -march=${isaBaselineMarch}";
 
         inherit (callFile ./common/extra-target-flags.nix { })
           EXTRA_FLAGS_FOR_TARGET
