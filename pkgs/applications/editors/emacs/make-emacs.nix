@@ -500,7 +500,10 @@ stdenv.mkDerivation (finalAttrs: {
   };
 
   meta = {
-    broken = withNativeCompilation && !(stdenv.buildPlatform.canExecute stdenv.hostPlatform);
+    # The build runs what it compiles: temacs byte-compiles the bundled Lisp and
+    # dumps itself into bootstrap-emacs.pdmp and emacs.pdmp. A build platform that
+    # cannot execute the host's code cannot do that, native compilation or not.
+    broken = !(stdenv.buildPlatform.canExecute stdenv.hostPlatform);
   }
   // meta;
 })
