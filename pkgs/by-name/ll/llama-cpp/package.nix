@@ -100,6 +100,18 @@ let
   ];
 
   buildCc = buildPackages.stdenv.cc;
+
+  # A cross build within one triple (build and host differ only by e.g. gcc.arch), as in
+  # opencv4. The CUDA setup hook arrives with nativeBuildInputs' nvcc -- the BUILD
+  # platform's -- and points CMake at its backendStdenv compiler, which reads build-side
+  # flags and cannot see this package's host CUDA headers: CMake's CUDA compiler check
+  # fails with "cuda_runtime.h: No such file or directory". The host nvcc (NVIDIA's
+  # generic binary) and host compiler run on the build machine here, so use them.
+  cudaIntraIsaCross =
+    cudaSupport
+    && effectiveStdenv.buildPlatform != effectiveStdenv.hostPlatform
+    && effectiveStdenv.buildPlatform.config == effectiveStdenv.hostPlatform.config;
+  cudaHostCxx = "${cudaPackages.backendStdenv.cc}/bin/${cudaPackages.backendStdenv.cc.targetPrefix}c++";
 in
 effectiveStdenv.mkDerivation (finalAttrs: {
   pname = "llama-cpp";
@@ -224,6 +236,10 @@ effectiveStdenv.mkDerivation (finalAttrs: {
   ++ optionals cudaSupport [
     (cmakeFeature "CMAKE_CUDA_ARCHITECTURES" cudaPackages.flags.cmakeCudaArchitecturesString)
   ]
+  ++ optionals cudaIntraIsaCross [
+    (cmakeFeature "CMAKE_CUDA_COMPILER" (lib.getExe cudaPackages.cuda_nvcc))
+    (cmakeFeature "CMAKE_CUDA_HOST_COMPILER" cudaHostCxx)
+  ]
   ++ optionals rocmSupport [
     (cmakeFeature "CMAKE_HIP_COMPILER" "${rocmPackages.clr.hipClangPath}/clang++")
     (cmakeFeature "CMAKE_HIP_ARCHITECTURES" (builtins.concatStringsSep ";" rocmGpuTargets))
@@ -309,4 +325,10 @@ effectiveStdenv.mkDerivation (finalAttrs: {
       # ggml-sycl needs icpx as the C++ compiler, which the CUDA stdenv replaces.
       || cudaSupport && syclSupport;
   };
+}
+// lib.optionalAttrs cudaIntraIsaCross {
+  # Keep the hook from appending its build-platform compiler flags after ours (CMake takes
+  # the last -D); the one other thing that step sets, fatbin compression, is kept here.
+  dontSetupCUDAToolkitCompilers = true;
+  env.NVCC_PREPEND_FLAGS = "-Xfatbin=-compress-all";
 })
