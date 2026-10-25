@@ -1,6 +1,8 @@
 {
   lib,
   stdenv,
+  buildPackages,
+  writeText,
   appstream,
   qtbase,
   qttools,
@@ -26,9 +28,24 @@ stdenv.mkDerivation {
 
   nativeBuildInputs = appstream.nativeBuildInputs ++ [ qttools ];
 
-  mesonFlags = appstream.mesonFlags ++ [
-    (lib.mesonBool "qt" true)
-  ];
+  mesonFlags =
+    appstream.mesonFlags
+    ++ [
+      (lib.mesonBool "qt" true)
+    ]
+    # A cross-built qtbase ships no moc/uic/rcc (it takes them from QT_HOST_PATH),
+    # and meson's Qt module looks for them only in the host Qt's bindir/libexecdir
+    # and on PATH, where the build platform's qtbase keeps them in libexec. Name
+    # them in a cross file ("MOC sources specified and couldn't find uic-qt6"
+    # otherwise).
+    ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+      "--cross-file=${writeText "appstream-qt-tools.ini" ''
+        [binaries]
+        moc = '${buildPackages.qt6.qtbase}/libexec/moc'
+        uic = '${buildPackages.qt6.qtbase}/libexec/uic'
+        rcc = '${buildPackages.qt6.qtbase}/libexec/rcc'
+      ''}"
+    ];
 
   patches = appstream.patches;
 
