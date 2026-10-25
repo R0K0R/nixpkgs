@@ -24,6 +24,11 @@ stdenv.mkDerivation {
     qtbase
   ];
 
+  # The build platform's pkg-config, which appstream's data/meson.build
+  # needs for its `dependency('appstream', native: true)` when cross-building
+  # ("Native appstream required for cross-building" otherwise).
+  depsBuildBuild = appstream.depsBuildBuild;
+
   nativeBuildInputs = appstream.nativeBuildInputs ++ [ qttools ];
 
   mesonFlags = appstream.mesonFlags ++ [
