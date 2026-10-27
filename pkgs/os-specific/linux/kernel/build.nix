@@ -222,12 +222,7 @@ lib.makeOverridable (
       # Required for deterministic builds along with some postPatch magic.
       ++ [
         ./randstruct-provide-seed-5.19.patch
-      ]
-      # GCC 15 + glibc 2.42: sys/cdefs.h defines __attribute_const__,
-      # conflicting with compiler_attributes.h when kernel host tools include
-      # both headers. Linux 7.2 guards the define upstream, so the patch applies
-      # in reverse there and aborts the build.
-      ++ lib.optional (lib.versionOlder version "7.2") ./attribute-const-glibc-2.42-compat.patch;
+      ];
 
     buildFlags = [
       target
