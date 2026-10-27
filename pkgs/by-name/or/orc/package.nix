@@ -7,9 +7,21 @@
   meson,
   ninja,
   hotdoc,
+  # The docs run tools/generate_md_opcodes_table, built for the host, at build
+  # time. A genuine cross build runs it under the host's emulator
+  # (mesonEmulatorHook below). A cross build within one triple -- the host
+  # differs from the build machine only by tuning, e.g. gcc.arch -- would get
+  # qemu-user for the same architecture, which need not implement the tuned
+  # ISA, so there the docs are built only when the build machine can run the
+  # host's binaries itself.
   buildDevDoc ?
     lib.meta.availableOn stdenv.hostPlatform hotdoc
-    && stdenv.hostPlatform.emulatorAvailable buildPackages,
+    && (
+      if stdenv.buildPlatform.config == stdenv.hostPlatform.config then
+        stdenv.buildPlatform.canExecute stdenv.hostPlatform
+      else
+        stdenv.hostPlatform.emulatorAvailable buildPackages
+    ),
   buildPackages,
   mesonEmulatorHook,
 
