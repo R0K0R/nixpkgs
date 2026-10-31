@@ -15,8 +15,24 @@ if [[ -n "${__nix_qtbase-}" ]]; then
             exit 1
         fi
     fi
+    # Intra-ISA cross: the BUILD-platform qtbase, propagated by the qmake hook
+    # in nativeBuildInputs, may have been set up first. Then QMAKE was its qmake
+    # and its mkspecs came first in QMAKEPATH, so every module was configured
+    # with the native mkspec and compiled by the unprefixed g++ -- the build
+    # platform's compiler, which neither carries the tuning nor sees what is
+    # added to NIX_CFLAGS_COMPILE (qtdeclarative's NIXPKGS_QML2_IMPORT_PREFIX).
+    # A cross-built qtbase takes over; the one it replaces is dropped from
+    # QMAKEPATH before configure (qtIntraIsaDropReplacedQtbase below).
+    if [[ -n "${NIX_IS_INTRA_ISA_CROSS-}" && "@qtCrossBuilt@" == 1 && -z "${__nix_qtbase_crossBuilt-}" ]]; then
+        __nix_qtbase_replaced="$__nix_qtbase"
+        __nix_qtbase="@dev@"
+        __nix_qtbase_crossBuilt=1
+        QMAKE=@dev@/bin/qmake
+        export QMAKE
+    fi
 else # Only set up Qt once.
 __nix_qtbase="@dev@"
+if [[ "@qtCrossBuilt@" == 1 ]]; then __nix_qtbase_crossBuilt=1; fi
 
 qtPluginPrefix=@qtPluginPrefix@
 qtQmlPrefix=@qtQmlPrefix@
@@ -73,6 +89,20 @@ qmakePathHook() {
 # idempotent for anything appearing in both lists.
 envBuildHostHooks+=(qmakePathHook)
 envHostTargetHooks+=(qmakePathHook)
+
+# The qtbase that a cross-built one replaced (see the top of this file) must
+# not supply mkspecs either: QMAKEPATH is searched first to last, and its
+# entry came first.
+qtIntraIsaDropReplacedQtbase() {
+    [[ -n "${__nix_qtbase_replaced-}" ]] || return 0
+    local IFS=: p kept=()
+    for p in $QMAKEPATH; do
+        [[ "$p" == "$__nix_qtbase_replaced" ]] || kept+=("$p")
+    done
+    QMAKEPATH="${kept[*]}"
+    export QMAKEPATH
+}
+preConfigureHooks+=(qtIntraIsaDropReplacedQtbase)
 
 # Propagate any runtime dependency of the building package.
 # Each dependency is propagated to the user environment and as a build
