@@ -28,9 +28,18 @@ qmakeConfigurePhase() {
     local flagsArray=()
     concatTo flagsArray qmakeFlags
 
+    # Intra-ISA cross: the qmake of the qtbase the setup hook chose ($QMAKE),
+    # not whichever qtbase's bin/ comes first on PATH -- that can be the build
+    # platform's, whose native mkspec compiles everything with the unprefixed,
+    # untuned g++. The generated Makefiles reuse the qmake that ran here.
+    local qmakeBin=qmake
+    if [[ -n "${NIX_IS_INTRA_ISA_CROSS-}" && -n "${QMAKE-}" ]]; then
+        qmakeBin=$QMAKE
+    fi
+
     echo "QMAKEPATH=$QMAKEPATH"
-    echo qmake "${flagsArray[@]}"
-    qmake "${flagsArray[@]}"
+    echo "$qmakeBin" "${flagsArray[@]}"
+    "$qmakeBin" "${flagsArray[@]}"
 
     if ! [[ -v enableParallelBuilding ]]; then
         enableParallelBuilding=1
