@@ -575,7 +575,11 @@ stdenv.mkDerivation (
                 fix_qt_module_paths
                 ;
               debug = debugSymbols;
-            };
+            }
+            # Only where it is set does the hook let this qtbase replace a
+            # build-platform one (intra-ISA cross); absent, a native qtbase's
+            # hook derivation keeps its attributes.
+            // lib.optionalAttrs (stdenv.buildPlatform != stdenv.hostPlatform) { qtCrossBuilt = "1"; };
             meta.license = lib.licenses.mit;
           } ../hooks/qtbase-setup-hook.sh;
         in
