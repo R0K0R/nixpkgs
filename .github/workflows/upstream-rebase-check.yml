@@ -1,15 +1,17 @@
 name: Upstream rebase check
 
 # Personal-fork automation, unrelated to NixOS/nixpkgs' own CI in this same
-# directory. It answers one question daily: does `combined-fundamental` still
-# rebase cleanly onto upstream/nixos-unstable? If yes, a ready-to-use
+# directory. It answers one question daily: does `combined-2026-10-23` (the
+# branch R0K0R/nixos pins) still rebase cleanly onto upstream/nixos-unstable? If yes, a ready-to-use
 # `rebase-candidate` branch is (re)published. If no, an issue is opened or
 # updated naming exactly what collided, and the run is marked failed so it
 # also surfaces through GitHub's own "workflow run failed" notification.
 #
-# combined-fundamental is never pushed to by this workflow -- only the
+# The base branch is never pushed to by this workflow -- only the
 # disposable `rebase-candidate` branch is. Adopting a clean rebase into
-# combined-fundamental itself stays a manual decision.
+# the base itself stays a manual decision. The file lives on the default
+# branch (combined-fundamental) because scheduled runs only start there;
+# BASE_BRANCH names the branch it checks.
 
 on:
   schedule:
@@ -35,7 +37,7 @@ env:
   UPSTREAM_REPO: NixOS/nixpkgs
   UPSTREAM_URL: https://github.com/NixOS/nixpkgs.git
   UPSTREAM_BRANCH: nixos-unstable
-  BASE_BRANCH: combined-fundamental
+  BASE_BRANCH: combined-2026-10-23
   CANDIDATE_BRANCH: rebase-candidate
   ISSUE_LABEL: upstream-rebase-conflict
 
@@ -164,7 +166,7 @@ jobs:
         run: |
           gh label create "$ISSUE_LABEL" --repo "$GITHUB_REPOSITORY" --force \
             --color "B60205" \
-            --description "combined-fundamental no longer rebases cleanly onto upstream"
+            --description "$BASE_BRANCH no longer rebases cleanly onto upstream"
 
       - name: Attempt the rebase
         id: rebase
