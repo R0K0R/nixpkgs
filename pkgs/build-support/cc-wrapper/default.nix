@@ -181,8 +181,14 @@ let
     && !(targetPlatform.useAndroidPrebuilt or false)
     && !(targetPlatform.isiOS or false)
     && gccForLibs != null;
+  # The triple subdirectory is where gcc puts the target libraries when it is
+  # configured as a cross compiler, which gcc decides by comparing triples. An
+  # intra-ISA cross (same config, different gcc.arch/tune) is a different
+  # platform to Nix but not to gcc: libstdc++ stays in $lib/lib, and a
+  # "$lib/<triple>/lib" search path makes clang fail to link -lstdc++.
   gccForLibs_solib =
-    getLib gccForLibs + optionalString (targetPlatform != hostPlatform) "/${targetPlatform.config}";
+    getLib gccForLibs
+    + optionalString (targetPlatform.config != hostPlatform.config) "/${targetPlatform.config}";
 
   # Analogously to cc_solib and gccForLibs_solib
   libcxx_solib = "${getLib libcxx}/lib";
