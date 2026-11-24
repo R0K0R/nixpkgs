@@ -145,9 +145,22 @@ let
 
   # Turn a derivation into its outPath without a string context attached.
   # See the comment at the usage site.
+  #
+  # Only a real store path may lose its context. A content-addressed
+  # derivation's outPath is a placeholder until it is built, and so is a
+  # *deferred* one: input-addressed, but with content-addressed inputs. A
+  # placeholder without context never reaches inputDrvs, so resolution cannot
+  # rewrite it and the output check reads it as an output name ("output check
+  # for 'out' contains output name '/0xwf…', but this is not a valid output of
+  # this derivation"), as kbd and e2fsprogs did when bash was deferred. Without
+  # content addressing every outPath is a store path and nothing changes.
   unsafeDerivationToUntrackedOutpath =
     drv:
-    if isDerivation drv && (!drv.__contentAddressed or false) then
+    if
+      isDerivation drv
+      && (!drv.__contentAddressed or false)
+      && lib.hasPrefix builtins.storeDir drv.outPath
+    then
       unsafeDiscardStringContext drv.outPath
     else
       drv;
