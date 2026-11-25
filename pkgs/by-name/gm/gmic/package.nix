@@ -97,9 +97,11 @@ stdenv.mkDerivation (finalAttrs: {
       --replace "LD_LIBRARY_PATH" "DYLD_LIBRARY_PATH"
   ''
   + lib.optionalString (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    # 3.7 runs it as `cmake -E env "LD_LIBRARY_PATH=..." ... ''${GMIC_BINARIES_PATH}/gmic`
+    # (man page, bash completion); swap the binary, the env vars are harmless.
     substituteInPlace CMakeLists.txt --replace-fail \
-      'LD_LIBRARY_PATH=''${GMIC_BINARIES_PATH} ''${GMIC_BINARIES_PATH}/gmic' \
-      '${lib.getExe buildPackages.gmic}'
+      '      ''${GMIC_BINARIES_PATH}/gmic' \
+      '      ${lib.getExe buildPackages.gmic}'
   '';
 
   passthru = {
