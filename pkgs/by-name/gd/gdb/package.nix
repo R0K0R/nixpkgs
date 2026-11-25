@@ -193,9 +193,14 @@ stdenv.mkDerivation (finalAttrs: {
   # Workaround for Apple Silicon, "--target" must be "faked", see eg: https://github.com/Homebrew/homebrew-core/pull/209753
   ++ optional stdenv.hostPlatform.isDarwin "--target=x86_64-apple-darwin";
 
+  # The compileall step only with python, which is in nativeBuildInputs only
+  # then (never when cross-compiling, by default). With python the string is
+  # unchanged, so native gdb keeps its hash.
   postInstall = ''
     # Remove Info files already provided by Binutils and other packages.
     rm -v $out/share/info/bfd.info
+  ''
+  + lib.optionalString pythonSupport ''
 
     # Make sure pyc files are generated before fixup
     python3 -m compileall $out/share/gdb/python/gdb
