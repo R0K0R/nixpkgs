@@ -88,7 +88,10 @@ qtModule {
     gperf
     ninja
     pkg-config
-    (python3.withPackages (ps: with ps; [ html5lib ]))
+    # The build platform's: GN runs it (exec_script). A bare python3.withPackages
+    # is not spliced, so an intra-ISA cross build got the host-tuned python and
+    # GN failed on any builder that cannot execute host code.
+    (buildPackages.python3.withPackages (ps: with ps; [ html5lib ]))
     which
     nodejs
   ]
